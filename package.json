@@ -1,0 +1,92 @@
+{
+  "name": "fluxhttp",
+  "version": "0.1.0",
+  "description": "A modern, comprehensive HTTP client library for JavaScript/TypeScript",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run tests/unit",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:all": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest watch",
+    "lint": "eslint src tests --ext .ts,.tsx",
+    "lint:fix": "eslint src tests --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "prepare": "husky install",
+    "examples": "node examples/run-all-examples.js",
+    "examples:basic": "node examples/run-all-examples.js basic",
+    "examples:advanced": "node examples/run-all-examples.js advanced",
+    "examples:errors": "node examples/run-all-examples.js errors",
+    "examples:performance": "node examples/run-all-examples.js performance",
+    "examples:real-world": "node examples/run-all-examples.js real-world"
+  },
+  "keywords": [
+    "http",
+    "client",
+    "request",
+    "fetch",
+    "axios",
+    "api",
+    "rest",
+    "ajax",
+    "promise",
+    "typescript",
+    "fluxhttp"
+  ],
+  "homepage": "https://fluxhttp.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fluxhttp/fluxhttp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fluxhttp/fluxhttp/issues"
+  },
+  "author": "FluxHTTP Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.43.0",
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vitest/coverage-v8": "^2.1.5",
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "husky": "^8.0.0",
+    "jsdom": "^26.1.0",
+    "lint-staged": "^15.1.0",
+    "prettier": "^3.1.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^2.1.5"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  },
+  "dependencies": {
+    "again": "^0.0.1"
+  }
+}
