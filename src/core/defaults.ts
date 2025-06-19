@@ -1,11 +1,12 @@
-import type { FluxHTTPRequestConfig, Headers } from '../types';
+import type { fluxhttpRequestConfig, Headers } from '../types';
 import { isPlainObject, isFormData, isURLSearchParams } from '../utils/data';
 
-export const defaults: FluxHTTPRequestConfig = {
+export const defaults: fluxhttpRequestConfig = {
+  method: 'GET',
   timeout: 0,
   headers: {
     Accept: 'application/json, text/plain, */*',
-    'User-Agent': 'FluxHTTP/0.1.0',
+    'User-Agent': 'fluxhttp/0.1.0',
   },
 
   validateStatus: (status: number): boolean => {

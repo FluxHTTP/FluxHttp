@@ -1,6 +1,6 @@
-import type { FluxHTTPRequestConfig, FluxHTTPResponse } from '../types';
+import type { fluxhttpRequestConfig, fluxhttpResponse } from '../types';
 
-export type Adapter = <T = unknown>(config: FluxHTTPRequestConfig) => Promise<FluxHTTPResponse<T>>;
+export type Adapter = <T = unknown>(config: fluxhttpRequestConfig) => Promise<fluxhttpResponse<T>>;
 
 export { xhrAdapter } from './xhr.adapter';
 export { httpAdapter } from './http.adapter';
@@ -12,24 +12,24 @@ export function getDefaultAdapter(): Adapter {
   if (typeof XMLHttpRequest !== 'undefined') {
     // Browser environment
     adapter = async function xhrAdapterWrapper<T = unknown>(
-      config: FluxHTTPRequestConfig
-    ): Promise<FluxHTTPResponse<T>> {
+      config: fluxhttpRequestConfig
+    ): Promise<fluxhttpResponse<T>> {
       const { xhrAdapter } = await import('./xhr.adapter');
       return xhrAdapter<T>(config);
     };
   } else if (typeof process !== 'undefined' && process.versions && process.versions.node) {
     // Node.js environment
     adapter = async function httpAdapterWrapper<T = unknown>(
-      config: FluxHTTPRequestConfig
-    ): Promise<FluxHTTPResponse<T>> {
+      config: fluxhttpRequestConfig
+    ): Promise<fluxhttpResponse<T>> {
       const { httpAdapter } = await import('./http.adapter');
       return httpAdapter<T>(config);
     };
   } else if (typeof fetch !== 'undefined') {
     // Modern runtime environment
     adapter = async function fetchAdapterWrapper<T = unknown>(
-      config: FluxHTTPRequestConfig
-    ): Promise<FluxHTTPResponse<T>> {
+      config: fluxhttpRequestConfig
+    ): Promise<fluxhttpResponse<T>> {
       const { fetchAdapter } = await import('./fetch.adapter');
       return fetchAdapter<T>(config);
     };

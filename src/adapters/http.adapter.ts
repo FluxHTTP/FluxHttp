@@ -2,14 +2,72 @@ import * as http from 'http';
 import * as https from 'https';
 import * as url from 'url';
 import * as zlib from 'zlib';
-import type { FluxHTTPRequestConfig, FluxHTTPResponse } from '../types';
+import type { fluxhttpRequestConfig, fluxhttpResponse, FluxProgressEvent } from '../types';
 import { createError, createTimeoutError, createNetworkError, createCancelError } from '../errors';
 import { buildURL } from '../utils/url';
 import { transformRequestData, isStream } from '../utils/data';
 
+// Type-safe JSON parser
+function parseJSON(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+// Type guard for validating response data
+function validateResponseData<T>(data: unknown, responseType?: string): data is T {
+  if (responseType === 'arraybuffer') {
+    return data instanceof ArrayBuffer || Buffer.isBuffer(data);
+  }
+  if (responseType === 'stream') {
+    return Boolean(data && typeof data === 'object' && 'pipe' in data);
+  }
+  // For json and text, we accept any type since they could be anything
+  return true;
+}
+
+// Helper to safely parse response based on type
+function parseResponseData<T>(
+  buffer: Buffer,
+  responseType?: string,
+  res?: http.IncomingMessage
+): T {
+  let data: unknown;
+
+  if (responseType === 'arraybuffer') {
+    data = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  } else if (responseType === 'stream') {
+    data = res;
+  } else {
+    const text = buffer.toString('utf-8');
+    data = responseType === 'json' ? parseJSON(text) : text;
+  }
+
+  if (!validateResponseData<T>(data, responseType)) {
+    throw new Error(`Invalid response data type for responseType: ${responseType || 'default'}`);
+  }
+
+  return data;
+}
+
+// Helper to normalize headers to string values
+function normalizeHeaders(
+  headers: Record<string, string | string[] | undefined>
+): Record<string, string> {
+  const normalized: Record<string, string> = {};
+  Object.entries(headers).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalized[key] = Array.isArray(value) ? value.join(', ') : String(value);
+    }
+  });
+  return normalized;
+}
+
 export function httpAdapter<T = unknown>(
-  config: FluxHTTPRequestConfig
-): Promise<FluxHTTPResponse<T>> {
+  config: fluxhttpRequestConfig
+): Promise<fluxhttpResponse<T>> {
   return new Promise((resolve, reject) => {
     const {
       data,
@@ -20,12 +78,18 @@ export function httpAdapter<T = unknown>(
       auth,
       responseType,
       signal,
+      cancelToken,
       onDownloadProgress,
-      decompress = true,
+      decompress,
     } = config;
 
     if (!requestUrl) {
-      return reject(createError('URL is required', config, 'ERR_INVALID_URL'));
+      return reject(createError('URL is required', 'ERR_INVALID_URL', config));
+    }
+
+    // Check if request is already canceled
+    if (cancelToken) {
+      cancelToken.throwIfRequested();
     }
 
     const fullURL = buildURL(requestUrl, config.params);
@@ -39,7 +103,7 @@ export function httpAdapter<T = unknown>(
       port: parsedUrl.port,
       path: parsedUrl.pathname + parsedUrl.search,
       method: method.toUpperCase(),
-      headers: { ...headers },
+      headers: normalizeHeaders(headers),
       timeout,
     };
 
@@ -52,111 +116,120 @@ export function httpAdapter<T = unknown>(
     if (requestData && !isStream(requestData)) {
       const dataStr = typeof requestData === 'string' ? requestData : JSON.stringify(requestData);
       const dataBuffer = Buffer.from(dataStr, 'utf-8');
-
-      if (!options.headers) options.headers = {};
-      (options.headers as Record<string, string>)['content-length'] = String(dataBuffer.length);
-
-      if (!(options.headers as Record<string, string>)['content-type']) {
-        (options.headers as Record<string, string>)['content-type'] = 'application/json';
+      if (options.headers && typeof options.headers === 'object') {
+        (options.headers as Record<string, string>)['Content-Length'] = String(dataBuffer.length);
       }
     }
 
     const req = transport.request(options, (res) => {
-      if (req.destroyed) return;
-
       const responseData: Buffer[] = [];
-      let downloadedBytes = 0;
 
       const handleResponseEnd = (): void => {
-        let body: T;
-        const buffer = Buffer.concat(responseData);
+        try {
+          const buffer = Buffer.concat(responseData);
 
-        if (responseType === 'arraybuffer') {
-          body = buffer as unknown as T;
-        } else if (responseType === 'stream') {
-          body = res as unknown as T;
-        } else {
-          const text = buffer.toString('utf-8');
-          body = (responseType === 'json' ? parseJSON(text) : text) as T;
-        }
+          // Parse response data safely
+          const body = parseResponseData<T>(buffer, responseType, res);
 
-        const response: FluxHTTPResponse<T> = {
-          data: body,
-          status: res.statusCode || 0,
-          statusText: res.statusMessage || '',
-          headers: res.headers as Record<string, string>,
-          config,
-          request: req,
-        };
+          const response: fluxhttpResponse<T> = {
+            data: body,
+            status: res.statusCode || 0,
+            statusText: res.statusMessage || '',
+            headers: normalizeHeaders(res.headers),
+            config,
+            request: req,
+          };
 
-        const validateStatus =
-          config.validateStatus || ((status: number): boolean => status >= 200 && status < 300);
+          const validateStatus =
+            config.validateStatus || ((status: number): boolean => status >= 200 && status < 300);
 
-        if (validateStatus(response.status)) {
-          resolve(response);
-        } else {
+          if (validateStatus(response.status)) {
+            resolve(response);
+          } else {
+            reject(
+              createError(
+                `Request failed with status ${response.status}`,
+                'ERR_BAD_RESPONSE',
+                config,
+                req,
+                response
+              )
+            );
+          }
+        } catch (error) {
           reject(
             createError(
-              `Request failed with status code ${response.status}`,
+              error instanceof Error ? error.message : 'Failed to parse response',
+              'ERR_PARSE_RESPONSE',
               config,
-              'ERR_BAD_RESPONSE',
-              req,
-              response
+              req
             )
           );
         }
       };
 
+      // Handle response streams
+      let responseStream: NodeJS.ReadableStream = res;
+
+      if ((decompress ?? true) && res.headers['content-encoding']) {
+        const encoding = res.headers['content-encoding'];
+        if (encoding === 'gzip') {
+          responseStream = res.pipe(zlib.createGunzip());
+        } else if (encoding === 'deflate') {
+          responseStream = res.pipe(zlib.createInflateRaw());
+        } else if (encoding === 'br') {
+          responseStream = res.pipe(zlib.createBrotliDecompress());
+        }
+      }
+
+      // Handle stream response type
       if (responseType === 'stream') {
-        handleResponseEnd();
+        const response: fluxhttpResponse<T> = {
+          data: responseStream as T,
+          status: res.statusCode || 0,
+          statusText: res.statusMessage || '',
+          headers: normalizeHeaders(res.headers),
+          config,
+          request: req,
+        };
+        resolve(response);
         return;
       }
 
-      let stream: NodeJS.ReadableStream = res;
-
-      if (decompress && res.headers['content-encoding']) {
-        const encoding = res.headers['content-encoding'];
-        if (encoding === 'gzip') {
-          stream = stream.pipe(zlib.createGunzip());
-        } else if (encoding === 'deflate') {
-          stream = stream.pipe(zlib.createInflate());
-        } else if (encoding === 'br') {
-          stream = stream.pipe(zlib.createBrotliDecompress());
-        }
-      }
-
-      stream.on('data', (chunk: Buffer) => {
+      // Collect response data
+      responseStream.on('data', (chunk: Buffer) => {
         responseData.push(chunk);
-        downloadedBytes += chunk.length;
-
         if (onDownloadProgress) {
-          const contentLength = parseInt(res.headers['content-length'] || '0', 10);
-          onDownloadProgress({
-            loaded: downloadedBytes,
-            total: contentLength || undefined,
-            progress: contentLength > 0 ? downloadedBytes / contentLength : undefined,
-            bytes: chunk.length,
-          });
+          const loaded = Buffer.concat(responseData).length;
+          const total = parseInt(res.headers['content-length'] || '0', 10) || 0;
+          const progressEvent: FluxProgressEvent = {
+            loaded,
+            total,
+            lengthComputable: total > 0,
+            bytes: loaded,
+          };
+          onDownloadProgress(progressEvent);
         }
       });
 
-      stream.on('end', handleResponseEnd);
-      stream.on('error', (err: Error) => {
-        reject(createNetworkError(err.message, config, req));
+      responseStream.on('end', handleResponseEnd);
+
+      responseStream.on('error', (error: Error) => {
+        reject(createNetworkError(error.message, config, req));
       });
     });
 
-    req.on('error', (err) => {
-      reject(createNetworkError(err.message, config, req));
+    // Handle request errors
+    req.on('error', (error: Error) => {
+      reject(createNetworkError(error.message, config, req));
     });
 
-    if (timeout) {
-      req.setTimeout(timeout, () => {
-        req.destroy();
-        reject(createTimeoutError(config, req));
-      });
-    }
+    req.on('timeout', () => {
+      req.destroy();
+      reject(createTimeoutError(config, req));
+    });
 
+    // Handle signal abort
     if (signal) {
       signal.addEventListener('abort', () => {
         req.destroy();
@@ -164,35 +237,25 @@ export function httpAdapter<T = unknown>(
       });
     }
 
+    // Handle cancel token
+    if (cancelToken) {
+      void cancelToken.promise.then((cancel) => {
+        req.destroy();
+        reject(createCancelError(cancel.message, config));
+      });
+    }
+
+    // Write request data
     if (requestData) {
-      if (isStream(requestData)) {
-        void (requestData as ReadableStream).pipeTo(
-          new WritableStream({
-            write(chunk): void {
-              req.write(chunk);
-            },
-            close(): void {
-              req.end();
-            },
-            abort(err?: Error): void {
-              req.destroy(err);
-            },
-          })
-        );
+      if (isStream(requestData) && typeof requestData === 'object' && 'pipe' in requestData) {
+        (requestData as unknown as NodeJS.ReadableStream).pipe(req);
       } else {
-        req.write(requestData);
+        const dataStr = typeof requestData === 'string' ? requestData : JSON.stringify(requestData);
+        req.write(dataStr);
         req.end();
       }
     } else {
       req.end();
     }
   });
-}
-
-function parseJSON(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
 }

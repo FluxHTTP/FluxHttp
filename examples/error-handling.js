@@ -1,10 +1,10 @@
 /**
- * FluxHTTP Error Handling Examples
+ * fluxhttp Error Handling Examples
  * Demonstrates comprehensive error handling strategies
  */
 
 const fluxhttp = require('../dist/index.js').default;
-const { create, FluxHTTPError } = require('../dist/index.js');
+const { create, fluxhttpError } = require('../dist/index.js');
 
 // Example 1: Basic error handling
 async function basicErrorHandling() {
@@ -13,13 +13,13 @@ async function basicErrorHandling() {
     const response = await fluxhttp.get('https://non-existent-domain-12345.com');
     console.log('Response:', response.data);
   } catch (error) {
-    if (FluxHTTPError.isFluxHTTPError(error)) {
-      console.log('FluxHTTP Error caught:');
+    if (fluxhttpError.isfluxhttpError(error)) {
+      console.log('fluxhttp Error caught:');
       console.log('- Message:', error.message);
       console.log('- Code:', error.code);
-      console.log('- Is FluxHTTP Error:', error.isFluxHTTPError);
+      console.log('- Is fluxhttp Error:', error.isfluxhttpError);
     } else {
-      console.log('Non-FluxHTTP error:', error.message);
+      console.log('Non-fluxhttp error:', error.message);
     }
   }
 }
@@ -31,7 +31,7 @@ async function statusCodeErrorHandling() {
     const response = await fluxhttp.get('https://jsonplaceholder.typicode.com/posts/999999');
     console.log('Response:', response.data);
   } catch (error) {
-    if (FluxHTTPError.isFluxHTTPError(error)) {
+    if (fluxhttpError.isfluxhttpError(error)) {
       console.log('HTTP Status Error:');
       console.log('- Status Code:', error.response?.status);
       console.log('- Status Text:', error.response?.statusText);
@@ -212,7 +212,7 @@ async function comprehensiveErrorInfo() {
   } catch (error) {
     console.log('Comprehensive Error Information:');
     console.log('- Error Type:', error.constructor.name);
-    console.log('- Is FluxHTTP Error:', FluxHTTPError.isFluxHTTPError(error));
+    console.log('- Is fluxhttp Error:', fluxhttpError.isfluxhttpError(error));
     console.log('- Message:', error.message);
     console.log('- Code:', error.code);
     console.log('- Stack:', error.stack?.split('\n')[0]);
@@ -238,7 +238,7 @@ async function comprehensiveErrorInfo() {
 
 // Run all error handling examples
 async function runErrorHandlingExamples() {
-  console.log('=== FluxHTTP Error Handling Examples ===\n');
+  console.log('=== fluxhttp Error Handling Examples ===\n');
 
   console.log('1. Basic Error Handling:');
   await basicErrorHandling();

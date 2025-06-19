@@ -1,9 +1,9 @@
 /**
- * FluxHTTP Real-World Scenarios
+ * fluxhttp Real-World Scenarios
  * Demonstrates practical usage patterns for common development scenarios
  */
 
-const { create, FluxHTTPError } = require('../dist/index.js');
+const { create, fluxhttpError } = require('../dist/index.js');
 
 // Example 1: API Client with Authentication
 class APIClient {
@@ -13,7 +13,7 @@ class APIClient {
       timeout: 10000,
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'FluxHTTP-API-Client/1.0.0'
+        'User-Agent': 'fluxhttp-API-Client/1.0.0'
       }
     });
 
@@ -259,7 +259,7 @@ class ServiceMesh {
     // Add service mesh headers
     client.interceptors.request.use(config => {
       config.headers = config.headers || {};
-      config.headers['X-Service-Mesh'] = 'FluxHTTP';
+      config.headers['X-Service-Mesh'] = 'fluxhttp';
       config.headers['X-Request-ID'] = this.generateRequestId();
       config.headers['X-Source-Service'] = name;
       return config;
@@ -360,7 +360,7 @@ class GraphQLClient {
 
       return response.data.data;
     } catch (error) {
-      if (FluxHTTPError.isFluxHTTPError(error)) {
+      if (fluxhttpError.isfluxhttpError(error)) {
         throw new Error(`GraphQL request failed: ${error.message}`);
       }
       throw error;
@@ -440,7 +440,7 @@ class WebhookHandler {
 
 // Run all real-world scenarios
 async function runRealWorldScenarios() {
-  console.log('=== FluxHTTP Real-World Scenarios ===\n');
+  console.log('=== fluxhttp Real-World Scenarios ===\n');
 
   console.log('1. API Client with Authentication:');
   try {
@@ -512,7 +512,7 @@ async function runRealWorldScenarios() {
     try {
       await webhookHandler.sendWebhook('https://httpbin.org/post', {
         event: 'test',
-        data: { message: 'Hello from FluxHTTP webhook' }
+        data: { message: 'Hello from fluxhttp webhook' }
       }, {
         secret: 'test-secret'
       });

@@ -1,18 +1,18 @@
 /**
- * FluxHTTP Advanced Configuration Examples
+ * fluxhttp Advanced Configuration Examples
  * Demonstrates custom instances, interceptors, and advanced features
  */
 
-const { fluxhttp, create, FluxHTTPError } = require('../dist/index.js');
+const { fluxhttp, create, fluxhttpError } = require('../dist/index.js');
 
-// Example 1: Creating a custom FluxHTTP instance
+// Example 1: Creating a custom fluxhttp instance
 function createCustomInstance() {
   const apiClient = create({
     baseURL: 'https://jsonplaceholder.typicode.com',
     timeout: 10000,
     headers: {
       'Content-Type': 'application/json',
-      'User-Agent': 'FluxHTTP-Advanced-Example/1.0.0'
+      'User-Agent': 'fluxhttp-Advanced-Example/1.0.0'
     },
     validateStatus: (status) => status >= 200 && status < 300
   });
@@ -70,7 +70,7 @@ async function responseInterceptorExample() {
       // Transform response data
       if (response.data && typeof response.data === 'object') {
         response.data.timestamp = new Date().toISOString();
-        response.data.processedBy = 'FluxHTTP-Advanced';
+        response.data.processedBy = 'fluxhttp-Advanced';
       }
       
       return response;
@@ -116,7 +116,7 @@ async function multipleInstancesExample() {
     timeout: 8000,
     headers: {
       'Accept': 'application/json',
-      'X-Client': 'FluxHTTP-Other'
+      'X-Client': 'fluxhttp-Other'
     }
   });
 
@@ -150,8 +150,8 @@ async function customValidationExample() {
     console.log('Custom Validation - Status:', response.status);
     console.log('Custom Validation - Data:', response.data);
   } catch (error) {
-    if (FluxHTTPError.isFluxHTTPError(error)) {
-      console.log('FluxHTTP Error Details:');
+    if (fluxhttpError.isfluxhttpError(error)) {
+      console.log('fluxhttp Error Details:');
       console.log('- Message:', error.message);
       console.log('- Code:', error.code);
       console.log('- Status:', error.response?.status);
@@ -252,7 +252,7 @@ async function requestTransformationExample() {
 
 // Run all advanced examples
 async function runAdvancedExamples() {
-  console.log('=== FluxHTTP Advanced Configuration Examples ===\n');
+  console.log('=== fluxhttp Advanced Configuration Examples ===\n');
 
   console.log('1. Request Interceptors:');
   await requestInterceptorExample();

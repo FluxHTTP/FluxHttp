@@ -1,6 +1,6 @@
-# FluxHTTP Usage Guide
+# fluxhttp Usage Guide
 
-A comprehensive guide to using FluxHTTP in your JavaScript/TypeScript applications. FluxHTTP is a modern, zero-dependency HTTP client library with full TypeScript support and 298 comprehensive tests.
+A comprehensive guide to using fluxhttp in your JavaScript/TypeScript applications. fluxhttp is a modern, zero-dependency HTTP client library with full TypeScript support and 298 comprehensive tests.
 
 ## Table of Contents
 
@@ -23,13 +23,13 @@ A comprehensive guide to using FluxHTTP in your JavaScript/TypeScript applicatio
 ## Installation
 
 ```bash
-npm install fluxhttp
+npm install @fluxhttp/core
 # or
-yarn add fluxhttp
+yarn add @fluxhttp/core
 # or
-pnpm add fluxhttp
+pnpm add @fluxhttp/core
 # or
-bun add fluxhttp
+bun add @fluxhttp/core
 ```
 
 ## Basic Usage
@@ -37,7 +37,7 @@ bun add fluxhttp
 ### Simple GET Request
 
 ```javascript
-import fluxhttp from 'fluxhttp';
+import fluxhttp from '@fluxhttp/core';
 
 // Async/await
 async function getUsers() {
@@ -73,7 +73,7 @@ console.log('Created user:', response.data);
 ### Global Configuration
 
 ```javascript
-import fluxhttp from 'fluxhttp';
+import fluxhttp from '@fluxhttp/core';
 
 // Set default config values
 fluxhttp.defaults.baseURL = 'https://api.example.com';
@@ -121,7 +121,7 @@ const authAPI = fluxhttp.create({
 
 ## Request Methods
 
-FluxHTTP supports all standard HTTP methods:
+fluxhttp supports all standard HTTP methods:
 
 ```javascript
 // GET request
@@ -261,7 +261,7 @@ const response = await fluxhttp.get('/protected', config);
 
 ## Response Schema
 
-All FluxHTTP responses follow this structure:
+All fluxhttp responses follow this structure:
 
 ```javascript
 {
@@ -318,8 +318,8 @@ try {
   const response = await fluxhttp.get('/users');
   console.log(response.data);
 } catch (error) {
-  if (fluxhttp.isFluxHTTPError(error)) {
-    // FluxHTTP error (request made, server responded)
+  if (fluxhttp.isfluxhttpError(error)) {
+    // fluxhttp error (request made, server responded)
     console.error('Response error:', error.response?.status);
     console.error('Response data:', error.response?.data);
     console.error('Request config:', error.config);
@@ -341,7 +341,7 @@ try {
   message: 'Request failed with status code 404',
   
   // Error name
-  name: 'FluxHTTPError',
+  name: 'fluxhttpError',
   
   // Error stack trace
   stack: '...',
@@ -369,7 +369,7 @@ try {
   },
   
   // Type guard
-  isFluxHTTPError: true
+  isfluxhttpError: true
 }
 ```
 
@@ -968,9 +968,9 @@ const blob = await transferManager.downloadFile('download-1', '/api/files/123');
 
 ```typescript
 import fluxhttp, { 
-  FluxHTTPResponse, 
-  FluxHTTPError,
-  FluxHTTPRequestConfig 
+  fluxhttpResponse, 
+  fluxhttpError,
+  fluxhttpRequestConfig 
 } from 'fluxhttp';
 
 interface User {
@@ -1013,7 +1013,7 @@ async function getUsersWrapped(): Promise<User[]> {
 ### Custom Instance Types
 
 ```typescript
-interface CustomConfig extends FluxHTTPRequestConfig {
+interface CustomConfig extends fluxhttpRequestConfig {
   retry?: number;
   retryDelay?: number;
 }
@@ -1054,7 +1054,7 @@ const createAPIClient = (baseURL: string) => {
 
 ```typescript
 class APIClient<T extends Record<string, any>> {
-  private client: FluxHTTPInstance;
+  private client: fluxhttpInstance;
   private resourcePath: string;
   
   constructor(baseURL: string, resourcePath: string) {
@@ -1122,13 +1122,13 @@ class APIError extends Error {
 }
 
 async function handleAPICall<T>(
-  request: Promise<FluxHTTPResponse<T>>
+  request: Promise<fluxhttpResponse<T>>
 ): Promise<T> {
   try {
     const response = await request;
     return response.data;
   } catch (error) {
-    if (fluxhttp.isFluxHTTPError(error)) {
+    if (fluxhttp.isfluxhttpError(error)) {
       const { response } = error;
       
       throw new APIError(
@@ -1160,7 +1160,7 @@ try {
 
 ## Testing
 
-### Mocking FluxHTTP
+### Mocking fluxhttp
 
 ```javascript
 // __mocks__/fluxhttp.js
@@ -1280,7 +1280,7 @@ try {
   const { data } = await fluxhttp.get('/api/data');
   console.log(data);
 } catch (error) {
-  if (fluxhttp.isFluxHTTPError(error)) {
+  if (fluxhttp.isfluxhttpError(error)) {
     // Handle HTTP errors
     console.error('Request failed:', error.response?.status);
   } else {
@@ -1594,4 +1594,4 @@ const user = await graphql.query(GET_USER, { id: '123' });
 
 ---
 
-This comprehensive guide covers all major aspects of using FluxHTTP. For more specific use cases or advanced scenarios, please refer to the [API documentation](./docs/API.md), [examples](./examples) directory, or the [migration guide](./docs/API.md#migration-from-axios) if you're coming from Axios.
+This comprehensive guide covers all major aspects of using fluxhttp. For more specific use cases or advanced scenarios, please refer to the [API documentation](./docs/API.md), [examples](./examples) directory, or the [migration guide](./docs/API.md#migration-from-axios) if you're coming from Axios.

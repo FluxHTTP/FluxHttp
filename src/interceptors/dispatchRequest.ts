@@ -1,14 +1,26 @@
-import type { FluxHTTPRequestConfig, FluxHTTPResponse } from '../types';
+import type { fluxhttpRequestConfig, fluxhttpResponse } from '../types';
 import type { InterceptorManager } from './InterceptorManager';
+import { executeWithRetry } from '../core/retry';
+import { fluxhttpError } from '../errors';
+
+// Type guards for interceptor chain values
+function isRequestConfig(value: unknown): value is fluxhttpRequestConfig {
+  return typeof value === 'object' && value !== null && ('url' in value || 'method' in value);
+}
+
+function isResponse<T>(value: unknown): value is fluxhttpResponse<T> {
+  return typeof value === 'object' && value !== null && 'status' in value && 'data' in value;
+}
 
 export async function dispatchRequest<T = unknown>(
-  config: FluxHTTPRequestConfig,
-  requestInterceptors: InterceptorManager<FluxHTTPRequestConfig>,
-  responseInterceptors: InterceptorManager<FluxHTTPResponse>,
-  adapter: (config: FluxHTTPRequestConfig) => Promise<FluxHTTPResponse<T>>
-): Promise<FluxHTTPResponse<T>> {
+  config: fluxhttpRequestConfig,
+  requestInterceptors: InterceptorManager<fluxhttpRequestConfig>,
+  responseInterceptors: InterceptorManager<fluxhttpResponse>,
+  adapter: (config: fluxhttpRequestConfig) => Promise<fluxhttpResponse<T>>
+): Promise<fluxhttpResponse<T>> {
   let modifiedConfig = config;
 
+  // Build request interceptor chain
   const requestInterceptorChain: Array<((value: unknown) => unknown) | undefined> = [];
   let synchronousRequestInterceptors = true;
 
@@ -19,70 +31,130 @@ export async function dispatchRequest<T = unknown>(
 
     synchronousRequestInterceptors =
       synchronousRequestInterceptors && (interceptor.options?.synchronous ?? false);
-    requestInterceptorChain.unshift(
-      interceptor.fulfilled as ((value: unknown) => unknown) | undefined,
-      interceptor.rejected
-    );
+
+    // Wrap handlers with type validation
+    const fulfilledWrapper = interceptor.fulfilled
+      ? (value: unknown): unknown => {
+          if (!isRequestConfig(value)) {
+            throw new fluxhttpError('Invalid request config in interceptor chain');
+          }
+          return interceptor.fulfilled!(value);
+        }
+      : undefined;
+
+    requestInterceptorChain.unshift(fulfilledWrapper, interceptor.rejected);
   });
 
+  // Build response interceptor chain
   const responseInterceptorChain: Array<((value: unknown) => unknown) | undefined> = [];
   responseInterceptors.forEach((interceptor) => {
-    responseInterceptorChain.push(
-      interceptor.fulfilled as ((value: unknown) => unknown) | undefined,
-      interceptor.rejected
-    );
+    const fulfilledWrapper = interceptor.fulfilled
+      ? (value: unknown): unknown => {
+          if (!isResponse(value)) {
+            throw new fluxhttpError('Invalid response in interceptor chain');
+          }
+          return interceptor.fulfilled!(value);
+        }
+      : undefined;
+
+    responseInterceptorChain.push(fulfilledWrapper, interceptor.rejected);
   });
 
-  let promise: Promise<unknown>;
+  let promise: Promise<fluxhttpResponse<T>>;
 
   if (!synchronousRequestInterceptors) {
+    // Async interceptor processing
+    const retryAdapter = async (configValue: unknown): Promise<fluxhttpResponse<T>> => {
+      if (!isRequestConfig(configValue)) {
+        throw new fluxhttpError('Invalid config passed to adapter');
+      }
+      return executeWithRetry(() => adapter(configValue), configValue);
+    };
+
     const chain: Array<((value: unknown) => unknown) | undefined> = [
       ...requestInterceptorChain,
-      adapter as (value: unknown) => unknown,
+      retryAdapter,
       undefined,
       ...responseInterceptorChain,
     ];
 
-    promise = Promise.resolve(modifiedConfig);
+    let currentPromise: Promise<unknown> = Promise.resolve(modifiedConfig);
+
     while (chain.length) {
       const onFulfilled = chain.shift();
       const onRejected = chain.shift();
-      promise = promise.then(onFulfilled, onRejected);
+      currentPromise = currentPromise.then(onFulfilled, onRejected);
     }
 
-    return promise as Promise<FluxHTTPResponse<T>>;
+    // Final validation and type assertion
+    promise = currentPromise.then((result) => {
+      if (!isResponse<T>(result)) {
+        throw new fluxhttpError('Invalid response from interceptor chain');
+      }
+      return result;
+    });
+
+    return promise;
   }
 
-  let len = requestInterceptorChain.length;
+  // Synchronous request interceptor processing
+  const len = requestInterceptorChain.length;
   for (let i = 0; i < len; i += 2) {
     const onFulfilled = requestInterceptorChain[i];
     const onRejected = requestInterceptorChain[i + 1];
 
     try {
-      modifiedConfig = onFulfilled
-        ? ((await onFulfilled(modifiedConfig)) as FluxHTTPRequestConfig)
-        : modifiedConfig;
+      if (onFulfilled) {
+        const result = await onFulfilled(modifiedConfig);
+        if (!isRequestConfig(result)) {
+          throw new fluxhttpError('Interceptor must return a valid request config');
+        }
+        modifiedConfig = result;
+      }
     } catch (error) {
       if (onRejected) {
-        modifiedConfig = (await onRejected(error)) as FluxHTTPRequestConfig;
+        const errorResult = await onRejected(error);
+        if (!isRequestConfig(errorResult)) {
+          throw new fluxhttpError('Error handler must return a valid request config');
+        }
+        modifiedConfig = errorResult;
       } else {
         throw error;
       }
     }
   }
 
+  // Execute request with retry
   try {
-    promise = adapter(modifiedConfig);
+    promise = executeWithRetry(() => adapter(modifiedConfig), modifiedConfig);
   } catch (error) {
     return Promise.reject(error);
   }
 
-  len = responseInterceptorChain.length;
-  for (let i = 0; i < len; i += 2) {
+  // Process response interceptors
+  const responseLen = responseInterceptorChain.length;
+  for (let i = 0; i < responseLen; i += 2) {
     const onFulfilled = responseInterceptorChain[i];
     const onRejected = responseInterceptorChain[i + 1];
-    promise = promise.then(onFulfilled, onRejected);
+
+    if (onFulfilled || onRejected) {
+      promise = promise.then(
+        onFulfilled
+          ? async (response: unknown): Promise<fluxhttpResponse<T>> => {
+              if (!isResponse(response)) {
+                throw new fluxhttpError('Invalid response in chain');
+              }
+              const result = await Promise.resolve(onFulfilled(response));
+              if (!isResponse<T>(result)) {
+                throw new fluxhttpError('Interceptor returned invalid response type');
+              }
+              return result;
+            }
+          : undefined,
+        onRejected
+      ) as Promise<fluxhttpResponse<T>>;
+    }
   }
 
-  return promise as Promise<FluxHTTPResponse<T>>;
+  return promise;
 }

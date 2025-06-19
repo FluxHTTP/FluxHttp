@@ -1,41 +1,72 @@
-import type { FluxHTTPStatic, FluxHTTPRequestConfig, FluxHTTPInstance } from '../types';
-import { FluxHTTP } from './FluxHTTP';
-import { FluxHTTPError } from '../errors';
+import type { fluxhttpStatic, fluxhttpRequestConfig, fluxhttpInstance } from '../types';
+import { fluxhttp } from './fluxhttp';
+import { fluxhttpError } from '../errors';
 import { mergeConfig } from './mergeConfig';
+import { isCancel as isCancelToken } from './canceltoken';
 
-export function createFluxHTTPInstance(defaultConfig?: FluxHTTPRequestConfig): FluxHTTPStatic {
-  const context = new FluxHTTP(defaultConfig);
+// Type guard to check if a key is a valid fluxhttp property
+function isFluxhttpKey(key: string | symbol | number, obj: fluxhttp): key is keyof fluxhttp {
+  return typeof key === 'string' && key in obj;
+}
 
-  const instance = FluxHTTP.prototype.request.bind(context) as unknown as FluxHTTPStatic;
+export function createfluxhttpInstance(defaultConfig?: fluxhttpRequestConfig): fluxhttpStatic {
+  const context = new fluxhttp(defaultConfig);
 
-  Object.setPrototypeOf(instance, Object.getPrototypeOf(context) as object);
-  Object.keys(context).forEach((key) => {
-    if (key in context && typeof context[key as keyof typeof context] !== 'undefined') {
-      (instance as unknown as Record<string, unknown>)[key] = context[key as keyof typeof context];
+  // Create the instance function by binding the request method
+  const instance = fluxhttp.prototype.request.bind(context);
+
+  // Set up proper prototype chain
+  const contextPrototype = Object.getPrototypeOf(context) as object | null;
+  if (contextPrototype !== null) {
+    Object.setPrototypeOf(instance, contextPrototype);
+  }
+
+  // Copy properties from context to instance in a type-safe way
+  const descriptors = Object.getOwnPropertyDescriptors(context);
+  Object.keys(descriptors).forEach((key) => {
+    if (isFluxhttpKey(key, context)) {
+      const value = context[key];
+      if (value !== undefined) {
+        Object.defineProperty(instance, key, {
+          value,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
+      }
     }
   });
 
-  instance.create = function create(config?: FluxHTTPRequestConfig): FluxHTTPInstance {
-    return createFluxHTTPInstance(mergeConfig(defaultConfig, config)) as FluxHTTPInstance;
+  // Safely extend the instance with static methods
+  // SAFETY: Create a properly typed static instance interface
+  const staticInstance = instance as unknown as fluxhttpStatic;
+
+  staticInstance.create = function create(config?: fluxhttpRequestConfig): fluxhttpInstance {
+    return createfluxhttpInstance(mergeConfig(defaultConfig, config));
   };
 
-  instance.isCancel = function isCancel(value: unknown): boolean {
+  staticInstance.isCancel = function isCancel(value: unknown): boolean {
+    // Check for cancel token
+    if (isCancelToken(value)) {
+      return true;
+    }
+    // Check for fluxhttpError with cancel code
     return Boolean(
-      value && typeof value === 'object' && 'code' in value && value.code === 'ERR_CANCELED'
+      value && typeof value === 'object' && 'code' in value && value.code === 'ECONNABORTED'
     );
   };
 
-  instance.all = function all<T>(values: Array<T | Promise<T>>): Promise<T[]> {
+  staticInstance.all = function all<T>(values: Array<T | Promise<T>>): Promise<T[]> {
     return Promise.all(values);
   };
 
-  instance.spread = function spread<T, R>(callback: (...args: T[]) => R): (array: T[]) => R {
+  staticInstance.spread = function spread<T, R>(callback: (...args: T[]) => R): (array: T[]) => R {
     return function wrap(array: T[]): R {
       return callback(...array);
     };
   };
 
-  instance.isFluxHTTPError = FluxHTTPError.isFluxHTTPError.bind(FluxHTTPError);
+  staticInstance.isfluxhttpError = fluxhttpError.isfluxhttpError.bind(fluxhttpError);
 
-  return instance;
+  return staticInstance;
 }

@@ -1,0 +1,78 @@
+# Source files
+src/
+tests/
+examples/
+docs/reports/
+
+# Configuration files
+.husky/
+.github/
+.git/
+.vscode/
+.idea/
+*.config.ts
+*.config.js
+tsconfig.json
+.eslintrc*
+.prettierrc*
+.gitignore
+.editorconfig
+
+# Development files
+coverage/
+*.log
+*.tmp
+.DS_Store
+node_modules/
+.env*
+.cache/
+
+# Documentation source files (keep only compiled docs)
+*.md
+!README.md
+!CHANGELOG.md
+!LICENSE
+
+# Test files
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+__tests__/
+__mocks__/
+
+# Build artifacts
+*.tgz
+*.map
+!dist/*.map
+
+# Editor files
+*.swp
+*.swo
+*~
+.project
+.settings/
+.classpath
+*.sublime-*
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+temp/
+tmp/
+*.temp
+*.tmp
+
+# Development scripts
+scripts/
+benchmarks/
+
+# Example files (users can get from GitHub)
+example.ts
+
+# CI/CD files
+.travis.yml
+.circleci/
+azure-pipelines.yml

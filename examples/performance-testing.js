@@ -1,5 +1,5 @@
 /**
- * FluxHTTP Performance Testing Examples
+ * fluxhttp Performance Testing Examples
  * Demonstrates performance testing and optimization strategies
  */
 
@@ -301,7 +301,7 @@ async function memoryMonitoring() {
 
 // Example 8: Comprehensive performance benchmark
 async function performanceBenchmark() {
-  console.log('Running FluxHTTP Performance Benchmark...\n');
+  console.log('Running fluxhttp Performance Benchmark...\n');
 
   const testSuites = [
     {
@@ -367,7 +367,7 @@ async function performanceBenchmark() {
 
 // Run all performance examples
 async function runPerformanceExamples() {
-  console.log('=== FluxHTTP Performance Testing Examples ===\n');
+  console.log('=== fluxhttp Performance Testing Examples ===\n');
 
   console.log('1. Single Request Performance:');
   await singleRequestPerformance();

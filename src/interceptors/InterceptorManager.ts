@@ -41,7 +41,7 @@ export class InterceptorManager<T> implements IInterceptorManager<T> {
   }
 
   *[Symbol.iterator](): IterableIterator<Interceptor<T>> {
-    for (const interceptor of this.interceptors.values()) {
+    for (const interceptor of Array.from(this.interceptors.values())) {
       yield interceptor;
     }
   }

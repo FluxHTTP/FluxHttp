@@ -1,3 +1,6 @@
+import type { CancelToken } from '../core/canceltoken';
+import type { SecurityConfig } from '../core/security';
+
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
 
 export type Headers = Record<string, string | string[] | undefined>;
@@ -15,8 +18,15 @@ export type RequestBody =
   | null
   | undefined;
 
-export interface FluxHTTPRequestConfig {
-  adapter?: <T = unknown>(config: FluxHTTPRequestConfig) => Promise<FluxHTTPResponse<T>>;
+export interface FluxProgressEvent {
+  loaded: number;
+  total: number;
+  lengthComputable: boolean;
+  bytes?: number;
+}
+
+export interface fluxhttpRequestConfig {
+  adapter?: <T = unknown>(config: fluxhttpRequestConfig) => Promise<fluxhttpResponse<T>>;
   url?: string;
   method?: HttpMethod;
   baseURL?: string;
@@ -37,10 +47,12 @@ export interface FluxHTTPRequestConfig {
   maxBodyLength?: number;
   decompress?: boolean;
   signal?: AbortSignal;
-  onUploadProgress?: (progressEvent: ProgressEvent) => void;
-  onDownloadProgress?: (progressEvent: ProgressEvent) => void;
+  cancelToken?: CancelToken;
+  onUploadProgress?: (progressEvent: FluxProgressEvent) => void;
+  onDownloadProgress?: (progressEvent: FluxProgressEvent) => void;
   retry?: RetryConfig;
   cache?: CacheConfig;
+  security?: SecurityConfig;
   transformRequest?: Array<(data: unknown, headers?: Headers) => unknown>;
   transformResponse?: Array<(data: unknown) => unknown>;
 }
@@ -50,32 +62,32 @@ export interface RetryConfig {
   delay?: number;
   maxDelay?: number;
   backoff?: 'exponential' | 'linear' | 'constant';
-  retryCondition?: (error: FluxHTTPError) => boolean;
+  retryCondition?: (error: fluxhttpError) => boolean;
 }
 
 export interface CacheConfig {
   enabled?: boolean;
   ttl?: number;
-  key?: (config: FluxHTTPRequestConfig) => string;
+  key?: (config: fluxhttpRequestConfig) => string;
   storage?: 'memory' | 'localStorage' | 'sessionStorage' | CacheStorage;
   excludeHeaders?: string[];
 }
 
-export interface FluxHTTPResponse<T = unknown> {
+export interface fluxhttpResponse<T = unknown> {
   data: T;
   status: number;
   statusText: string;
   headers: Headers;
-  config: FluxHTTPRequestConfig;
+  config: fluxhttpRequestConfig;
   request?: unknown;
 }
 
-export interface FluxHTTPError extends Error {
-  config?: FluxHTTPRequestConfig;
+export interface fluxhttpError extends Error {
+  config?: fluxhttpRequestConfig;
   code?: string;
   request?: unknown;
-  response?: FluxHTTPResponse;
-  isFluxHTTPError: boolean;
+  response?: fluxhttpResponse;
+  isfluxhttpError: boolean;
   toJSON: () => Record<string, unknown>;
 }
 
@@ -101,44 +113,45 @@ export interface InterceptorManager<T> {
 
 export interface InterceptorOptions {
   synchronous?: boolean;
-  runWhen?: (config: FluxHTTPRequestConfig) => boolean;
+  runWhen?: (config: fluxhttpRequestConfig) => boolean;
 }
 
-export interface FluxHTTPInstance {
-  defaults: FluxHTTPRequestConfig;
+export interface fluxhttpInstance {
+  defaults: fluxhttpRequestConfig;
   interceptors: {
-    request: InterceptorManager<FluxHTTPRequestConfig>;
-    response: InterceptorManager<FluxHTTPResponse>;
+    request: InterceptorManager<fluxhttpRequestConfig>;
+    response: InterceptorManager<fluxhttpResponse>;
   };
 
-  request<T = unknown>(config: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>;
-  get<T = unknown>(url: string, config?: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>;
-  delete<T = unknown>(url: string, config?: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>;
-  head<T = unknown>(url: string, config?: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>;
-  options<T = unknown>(url: string, config?: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>;
+  request<T = unknown>(config: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>;
+  request<T = unknown>(url: string): Promise<fluxhttpResponse<T>>;
+  get<T = unknown>(url: string, config?: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>;
+  delete<T = unknown>(url: string, config?: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>;
+  head<T = unknown>(url: string, config?: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>;
+  options<T = unknown>(url: string, config?: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>;
   post<T = unknown>(
     url: string,
     data?: RequestBody,
-    config?: FluxHTTPRequestConfig
-  ): Promise<FluxHTTPResponse<T>>;
+    config?: fluxhttpRequestConfig
+  ): Promise<fluxhttpResponse<T>>;
   put<T = unknown>(
     url: string,
     data?: RequestBody,
-    config?: FluxHTTPRequestConfig
-  ): Promise<FluxHTTPResponse<T>>;
+    config?: fluxhttpRequestConfig
+  ): Promise<fluxhttpResponse<T>>;
   patch<T = unknown>(
     url: string,
     data?: RequestBody,
-    config?: FluxHTTPRequestConfig
-  ): Promise<FluxHTTPResponse<T>>;
+    config?: fluxhttpRequestConfig
+  ): Promise<fluxhttpResponse<T>>;
 
-  getUri(config?: FluxHTTPRequestConfig): string;
+  getUri(config?: fluxhttpRequestConfig): string;
 }
 
-export interface FluxHTTPStatic extends FluxHTTPInstance {
-  create(config?: FluxHTTPRequestConfig): FluxHTTPInstance;
+export interface fluxhttpStatic extends fluxhttpInstance {
+  create(config?: fluxhttpRequestConfig): fluxhttpInstance;
   isCancel(value: unknown): boolean;
   all<T>(values: Array<T | Promise<T>>): Promise<T[]>;
   spread<T, R>(callback: (...args: T[]) => R): (array: T[]) => R;
-  isFluxHTTPError(value: unknown): value is FluxHTTPError;
+  isfluxhttpError(value: unknown): value is fluxhttpError;
 }

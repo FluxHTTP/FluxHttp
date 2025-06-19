@@ -1,5 +1,5 @@
 /**
- * FluxHTTP Basic Usage Examples
+ * fluxhttp Basic Usage Examples
  * Demonstrates fundamental HTTP operations
  */
 
@@ -21,8 +21,8 @@ async function basicGet() {
 async function basicPost() {
   try {
     const postData = {
-      title: 'FluxHTTP Test Post',
-      body: 'This is a test post created with FluxHTTP',
+      title: 'fluxhttp Test Post',
+      body: 'This is a test post created with fluxhttp',
       userId: 1
     };
 
@@ -39,8 +39,8 @@ async function basicPut() {
   try {
     const updateData = {
       id: 1,
-      title: 'Updated FluxHTTP Post',
-      body: 'This post has been updated using FluxHTTP PUT method',
+      title: 'Updated fluxhttp Post',
+      body: 'This post has been updated using fluxhttp PUT method',
       userId: 1
     };
 
@@ -69,7 +69,7 @@ async function requestWithHeaders() {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer your-token-here',
-        'X-Custom-Header': 'FluxHTTP-Example'
+        'X-Custom-Header': 'fluxhttp-Example'
       }
     };
 
@@ -117,7 +117,7 @@ async function requestWithTimeout() {
 
 // Run all examples
 async function runBasicExamples() {
-  console.log('=== FluxHTTP Basic Usage Examples ===\n');
+  console.log('=== fluxhttp Basic Usage Examples ===\n');
 
   console.log('1. Basic GET Request:');
   await basicGet();

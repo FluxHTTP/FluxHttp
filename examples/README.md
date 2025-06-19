@@ -1,6 +1,6 @@
-# FluxHTTP Examples
+# fluxhttp Examples
 
-This directory contains comprehensive examples demonstrating FluxHTTP's capabilities and usage patterns.
+This directory contains comprehensive examples demonstrating fluxhttp's capabilities and usage patterns.
 
 ## Examples Overview
 
@@ -16,7 +16,7 @@ Demonstrates fundamental HTTP operations:
 
 ### 2. Advanced Configuration (`advanced-configuration.js`)
 Shows advanced features and configuration options:
-- Custom FluxHTTP instances
+- Custom fluxhttp instances
 - Request and response interceptors
 - Multiple instances with different configurations
 - Custom validation logic
@@ -163,7 +163,7 @@ try {
   const response = await fluxhttp.get('/api/data');
   console.log(response.data);
 } catch (error) {
-  if (FluxHTTPError.isFluxHTTPError(error)) {
+  if (fluxhttpError.isfluxhttpError(error)) {
     console.log('Status:', error.response?.status);
     console.log('Message:', error.message);
   }
@@ -186,7 +186,7 @@ async function makeRequestWithRetry(url, maxRetries = 3) {
 
 ## Performance Tips
 
-1. **Reuse Instances**: Create FluxHTTP instances once and reuse them
+1. **Reuse Instances**: Create fluxhttp instances once and reuse them
 2. **Concurrent Requests**: Use `Promise.all()` for concurrent requests
 3. **Proper Timeouts**: Set appropriate timeout values
 4. **Memory Management**: Clean up interceptors when no longer needed
@@ -195,7 +195,7 @@ async function makeRequestWithRetry(url, maxRetries = 3) {
 ## Testing Your Code
 
 These examples include both successful and error scenarios to help you understand:
-- How FluxHTTP behaves under different conditions
+- How fluxhttp behaves under different conditions
 - Proper error handling patterns
 - Performance characteristics
 - Memory usage patterns
@@ -210,8 +210,8 @@ If you have additional examples or improvements, please:
 
 ## Support
 
-For questions about these examples or FluxHTTP usage:
+For questions about these examples or fluxhttp usage:
 - Check the main README.md
 - Review the TypeScript definitions
-- Run the examples to see FluxHTTP in action
+- Run the examples to see fluxhttp in action
 - Create issues for bugs or feature requests

@@ -1,4 +1,4 @@
-export { FluxHTTPError } from './FluxHTTPError';
+export { fluxhttpError } from './fluxhttperror';
 export {
   createError,
   createRequestError,

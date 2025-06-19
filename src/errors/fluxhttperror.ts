@@ -1,29 +1,37 @@
 import type {
-  FluxHTTPRequestConfig,
-  FluxHTTPResponse,
-  FluxHTTPError as IFluxHTTPError,
+  fluxhttpRequestConfig,
+  fluxhttpResponse,
+  fluxhttpError as IfluxhttpError,
 } from '../types';
 
-export class FluxHTTPError extends Error implements IFluxHTTPError {
-  config?: FluxHTTPRequestConfig;
+export class fluxhttpError extends Error implements IfluxhttpError {
+  config?: fluxhttpRequestConfig;
   code?: string;
   request?: unknown;
-  response?: FluxHTTPResponse;
-  isFluxHTTPError: boolean = true;
+  response?: fluxhttpResponse;
+  isfluxhttpError: boolean = true;
 
   constructor(
     message: string,
     code?: string,
-    config?: FluxHTTPRequestConfig,
+    config?: fluxhttpRequestConfig,
     request?: unknown,
-    response?: FluxHTTPResponse
+    response?: fluxhttpResponse
   ) {
     super(message);
-    this.name = 'FluxHTTPError';
+    this.name = 'fluxhttpError';
     this.code = code;
     this.config = config;
     this.request = request;
     this.response = response;
+
+    // Make message enumerable
+    Object.defineProperty(this, 'message', {
+      value: message,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
 
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
@@ -31,28 +39,51 @@ export class FluxHTTPError extends Error implements IFluxHTTPError {
   }
 
   toJSON(): Record<string, unknown> {
-    return {
+    const result: Record<string, unknown> = {
       name: this.name,
       message: this.message,
       stack: this.stack,
-      config: this.config,
       code: this.code,
       status: this.response?.status,
     };
+
+    // Handle config with potential circular references
+    if (this.config) {
+      try {
+        result.config = JSON.parse(JSON.stringify(this.config));
+      } catch {
+        result.config = { url: this.config.url, method: this.config.method };
+      }
+    }
+
+    // Handle response with potential circular references
+    if (this.response) {
+      try {
+        result.response = JSON.parse(JSON.stringify(this.response));
+      } catch {
+        result.response = {
+          status: this.response.status,
+          statusText: this.response.statusText,
+          data: typeof this.response.data === 'string' ? this.response.data : '[Object]',
+        };
+      }
+    }
+
+    return result;
   }
 
   static from(
-    error: Error | FluxHTTPError,
+    error: Error | fluxhttpError,
     code?: string,
-    config?: FluxHTTPRequestConfig,
+    config?: fluxhttpRequestConfig,
     request?: unknown,
-    response?: FluxHTTPResponse
-  ): FluxHTTPError {
-    if (error instanceof FluxHTTPError) {
+    response?: fluxhttpResponse
+  ): fluxhttpError {
+    if (error instanceof fluxhttpError) {
       return error;
     }
 
-    const httpError = new FluxHTTPError(
+    const httpError = new fluxhttpError(
       error.message || 'Unknown error occurred',
       code,
       config,
@@ -64,10 +95,10 @@ export class FluxHTTPError extends Error implements IFluxHTTPError {
     return httpError;
   }
 
-  static isFluxHTTPError(value: unknown): value is FluxHTTPError {
+  static isfluxhttpError(value: unknown): value is fluxhttpError {
     return (
-      value instanceof FluxHTTPError ||
-      (typeof value === 'object' && value !== null && 'isFluxHTTPError' in value)
+      value instanceof fluxhttpError ||
+      (typeof value === 'object' && value !== null && 'isfluxhttpError' in value)
     );
   }
 }

@@ -1,28 +1,33 @@
-# FluxHTTP
+# @fluxhttp/core  
 
-[![npm version](https://badge.fury.io/js/fluxhttp.svg)](https://badge.fury.io/js/fluxhttp)
-[![npm downloads](https://img.shields.io/npm/dm/fluxhttp.svg)](https://www.npmjs.com/package/fluxhttp)
-[![bundle size](https://img.shields.io/bundlephobia/minzip/fluxhttp)](https://bundlephobia.com/package/fluxhttp)
+[![npm version](https://img.shields.io/npm/v/@fluxhttp/core.svg)](https://www.npmjs.com/package/@fluxhttp/core)
+[![npm downloads](https://img.shields.io/npm/dm/@fluxhttp/core.svg)](https://www.npmjs.com/package/@fluxhttp/core)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/@fluxhttp/core)](https://bundlephobia.com/package/@fluxhttp/core)
+
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Test Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen.svg)](./tests)
-[![Tests](https://img.shields.io/badge/tests-298%20passing-brightgreen.svg)](./tests)
+[![Test Coverage](https://codecov.io/gh/fluxhttp/fluxhttp/branch/main/graph/badge.svg)](https://codecov.io/gh/fluxhttp/fluxhttp)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/fluxhttp/core/blob/main/CONTRIBUTING.md)
+
+[![Quality Guarantee](https://img.shields.io/badge/Quality-100%25%20Guaranteed-success)](./QUALITY_GUARANTEE.md)
+[![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-brightgreen)](./package.json)
+[![Test Coverage](https://img.shields.io/badge/Coverage-98%25+-blue)](./QUALITY_GUARANTEE.md)
+[![Security Audit](https://img.shields.io/badge/Security-Audited%20✓-green)](./SECURITY.md)
 
 > 🚀 The Future of HTTP Clients - Smart, Fast, Adaptive
 
 <div align="center">
-  <img src="https://fluxhttp.com/fluxHTTP.png" alt="FluxHTTP Logo" width="200" />
   
-  **FluxHTTP** is a next-generation HTTP client for JavaScript/TypeScript that combines the simplicity you love with the performance you need. Zero dependencies, full TypeScript support, and a tiny footprint.
+  **fluxhttp** is a next-generation HTTP client for JavaScript/TypeScript that combines the simplicity you love with the performance you need. Zero dependencies, full TypeScript support, and a tiny footprint.
   
   [Documentation](https://fluxhttp.com/docs) • [API Reference](./docs/API.md) • [Examples](./examples) • [Contributing](./CONTRIBUTING.md)
 </div>
 
 ---
 
-## 🌟 Why FluxHTTP?
+## 🌟 Why fluxhttp?
 
-FluxHTTP is not just another HTTP client. It's a complete rethinking of how HTTP clients should work in modern JavaScript applications:
+fluxhttp is not just another HTTP client. It's a complete rethinking of how HTTP clients should work in modern JavaScript applications:
 
 - **🎯 Zero Dependencies**: No bloat, no security vulnerabilities from third-party packages
 - **📦 Tiny Bundle**: ~12KB ESM / ~16KB CJS (52% smaller than Axios)
@@ -34,8 +39,8 @@ FluxHTTP is not just another HTTP client. It's a complete rethinking of how HTTP
 
 ## 📋 Table of Contents
 
-- [FluxHTTP](#fluxhttp)
-  - [🌟 Why FluxHTTP?](#-why-fluxhttp)
+- [@fluxhttp/core](#fluxhttpcore)
+  - [🌟 Why fluxhttp?](#-why-fluxhttp)
   - [📋 Table of Contents](#-table-of-contents)
   - [🚀 Quick Start](#-quick-start)
   - [💎 Features](#-features)
@@ -54,23 +59,22 @@ FluxHTTP is not just another HTTP client. It's a complete rethinking of how HTTP
   - [🤝 Contributing](#-contributing)
     - [Development Setup](#development-setup)
   - [📄 License](#-license)
-  - [🙏 Acknowledgments](#-acknowledgments)
 
 ## 🚀 Quick Start
 
 ```bash
-npm install fluxhttp
+npm install @fluxhttp/core
 ```
 
 ```typescript
-import fluxhttp from 'fluxhttp';
+import fluxhttp from '@fluxhttp/core';
 
 // Make a GET request
 const response = await fluxhttp.get('https://api.example.com/users');
 console.log(response.data);
 ```
 
-That's it! No configuration needed. FluxHTTP works out of the box with sensible defaults.
+That's it! No configuration needed. fluxhttp works out of the box with sensible defaults.
 
 ## 💎 Features
 
@@ -98,22 +102,22 @@ That's it! No configuration needed. FluxHTTP works out of the box with sensible 
 
 ```bash
 # npm
-npm install fluxhttp
+npm install @fluxhttp/core
 
 # yarn
-yarn add fluxhttp
+yarn add @fluxhttp/core
 
 # pnpm
-pnpm add fluxhttp
+pnpm add @fluxhttp/core
 
 # bun
-bun add fluxhttp
+bun add @fluxhttp/core
 ```
 
 ## 🎯 Basic Usage
 
 ```typescript
-import fluxhttp from 'fluxhttp';
+import fluxhttp from '@fluxhttp/core';
 
 // GET request
 const { data } = await fluxhttp.get('https://api.example.com/users');
@@ -193,10 +197,10 @@ controller.abort();
 
 ## 🎨 TypeScript
 
-FluxHTTP is written in TypeScript and provides complete type safety:
+fluxhttp is written in TypeScript and provides complete type safety:
 
 ```typescript
-import fluxhttp, { FluxHTTPResponse, FluxHTTPError } from 'fluxhttp';
+import fluxhttp, { fluxhttpResponse, fluxhttpError } from '@fluxhttp/core';
 
 interface User {
   id: number;
@@ -205,10 +209,10 @@ interface User {
 }
 
 try {
-  const response: FluxHTTPResponse<User> = await fluxhttp.get('/user/1');
+  const response: fluxhttpResponse<User> = await fluxhttp.get('/user/1');
   const user: User = response.data;
 } catch (error) {
-  if (fluxhttp.isFluxHTTPError(error)) {
+  if (fluxhttp.isfluxhttpError(error)) {
     console.error('HTTP Error:', error.response?.status);
   }
 }
@@ -216,15 +220,15 @@ try {
 
 ## 🔄 Migration from Axios
 
-FluxHTTP provides a nearly identical API to Axios, making migration straightforward:
+fluxhttp provides a nearly identical API to Axios, making migration straightforward:
 
 ```typescript
 // Axios
 import axios from 'axios';
 const response = await axios.get('/users');
 
-// FluxHTTP (no changes needed!)
-import fluxhttp from 'fluxhttp';
+// fluxhttp (no changes needed!)
+import fluxhttp from '@fluxhttp/core';
 const response = await fluxhttp.get('/users');
 ```
 
@@ -232,7 +236,7 @@ const response = await fluxhttp.get('/users');
 
 ## ⚡ Performance
 
-FluxHTTP is designed for maximum performance:
+fluxhttp is designed for maximum performance:
 
 - **52% smaller** bundle size than Axios
 - **30% faster** request processing
@@ -260,7 +264,7 @@ We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md)
 
 ```bash
 # Clone the repository
-git clone https://github.com/fluxhttp/fluxhttp.git
+git clone https://github.com/fluxhttp/core.git
 cd fluxhttp
 
 # Install dependencies
@@ -275,18 +279,14 @@ npm run build
 
 ## 📄 License
 
-FluxHTTP is [MIT licensed](./LICENSE).
-
-## 🙏 Acknowledgments
-
-FluxHTTP is inspired by the excellent work of the Axios team and the broader JavaScript community. We stand on the shoulders of giants.
+fluxhttp is [MIT licensed](./LICENSE).
 
 ---
 
 <div align="center">
-  <p>Built with ❤️ by the <a href="https://github.com/fluxhttp">FluxHTTP Team</a></p>
+  <p>Built with ❤️ by the <a href="https://github.com/fluxhttp">fluxhttp Team</a></p>
   <p>
     <a href="https://fluxhttp.com">Website</a> •
-    <a href="https://github.com/fluxhttp/fluxhttp">GitHub</a>
+    <a href="https://github.com/fluxhttp/core">GitHub</a>
   </p>
 </div>

@@ -1,362 +1,731 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetchAdapter } from '../../../src/adapters/fetch.adapter';
-import type { FluxHTTPRequestConfig } from '../../../src/types';
+import { describe, it, beforeEach, afterEach } from 'node:test';
+import assert from 'node:assert';
 
 // Mock global fetch
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
+let mockFetchResponse;
+let mockFetchError;
+let fetchCallCount = 0;
+let lastFetchCall = null;
+
+(global as any).fetch = async (url, options) => {
+  fetchCallCount++;
+  lastFetchCall = { url, options };
+
+  if (mockFetchError) {
+    throw mockFetchError;
+  }
+
+  return (
+    mockFetchResponse || {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: new Map([['content-type', 'application/json']]),
+      json: async (): Promise<any> => ({ test: 'data' }),
+      text: async () => '{"test":"data"}',
+      blob: async () => new Blob(['test']),
+      arrayBuffer: async () => new ArrayBuffer(4),
+      body: null,
+    }
+  );
+};
+
+(global as any).Headers = class Headers extends Map {
+  constructor(init) {
+    super();
+    if (init) {
+      Object.entries(init).forEach(([key, value]) => {
+        this.set(key.toLowerCase(), value);
+      });
+    }
+  }
+
+  entries() {
+    return Array.from(super.entries());
+  }
+};
+
+(global as any).AbortController = class AbortController {
+  constructor() {
+    this.signal = { aborted: false };
+  }
+
+  abort() {
+    this.signal.aborted = true;
+  }
+};
+
+(global as any).Blob = class Blob {
+  constructor(parts) {
+    this.parts = parts;
+    this.size = parts.reduce((sum, part) => sum + part.length, 0);
+  }
+};
+
+(global as any).FormData = class FormData {
+  constructor() {
+    this._data = new Map();
+  }
+
+  append(key, value) {
+    this._data.set(key, value);
+  }
+};
+
+(global as any).URLSearchParams = class URLSearchParams {
+  constructor(init) {
+    this._params = new Map();
+    if (init) {
+      Object.entries(init).forEach(([key, value]) => {
+        this._params.set(key, value);
+      });
+    }
+  }
+
+  toString() {
+    return Array.from(this._params.entries())
+      .map(([key, value]) => `${key}=${value}`)
+      .join('&');
+  }
+};
+
+(global as any).ReadableStream = class ReadableStream {};
+
+// Import after mocking globals
+import { fetchAdapter } from '../../../dist/adapters/fetch.adapter.js';
 
 describe('fetchAdapter', () => {
   beforeEach(() => {
-    mockFetch.mockClear();
+    mockFetchResponse = null;
+    mockFetchError = null;
+    fetchCallCount = 0;
+    lastFetchCall = null;
   });
 
-  it('should make a successful GET request', async () => {
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: new Headers({ 'content-type': 'application/json' }),
-      json: vi.fn().mockResolvedValue({ data: 'test' }),
-      text: vi.fn().mockResolvedValue('{"data":"test"}'),
-    };
-    mockFetch.mockResolvedValue(mockResponse);
-
-    const config: FluxHTTPRequestConfig = {
-      url: 'https://api.example.com/test',
-      method: 'GET',
-    };
-
-    const response = await fetchAdapter(config);
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.example.com/test',
-      expect.objectContaining({
+  describe('Basic requests', (): void => {
+    it('should make a GET request', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
         method: 'GET',
-        credentials: 'same-origin',
-      })
-    );
-    expect(response.status).toBe(200);
-    expect(response.data).toEqual({ data: 'test' });
-  });
+      };
 
-  it('should handle POST request with data', async () => {
-    const mockResponse = {
-      ok: true,
-      status: 201,
-      statusText: 'Created',
-      headers: new Headers(),
-      json: vi.fn().mockResolvedValue({ id: 1 }),
-      text: vi.fn().mockResolvedValue('{"id":1}'),
-    };
-    mockFetch.mockResolvedValue(mockResponse);
+      const response = await fetchAdapter(config);
 
-    const config: FluxHTTPRequestConfig = {
-      url: 'https://api.example.com/users',
-      method: 'POST',
-      data: JSON.stringify({ name: 'test' }),
-      headers: { 'Content-Type': 'application/json' },
-    };
+      assert.strictEqual(fetchCallCount, 1);
+      assert.strictEqual(lastFetchCall.url, 'https://api.test.com/data');
+      assert.strictEqual(lastFetchCall.options.method, 'GET');
+      assert.deepStrictEqual(response.data, { test: 'data' });
+      assert.strictEqual(response.status, 200);
+    });
 
-    const response = await fetchAdapter(config);
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.example.com/users',
-      expect.objectContaining({
+    it('should make a POST request with data', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
         method: 'POST',
-        body: JSON.stringify({ name: 'test' }),
-      })
-    );
-    expect(response.status).toBe(201);
-  });
+        data: { name: 'test', value: 123 },
+      };
 
-  it('should handle request with query parameters', async () => {
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: new Headers(),
-      text: vi.fn().mockResolvedValue('test'),
-    };
-    mockFetch.mockResolvedValue(mockResponse);
+      await fetchAdapter(config);
 
-    const config: FluxHTTPRequestConfig = {
-      url: 'https://api.example.com/search',
-      method: 'GET',
-      params: { q: 'test', limit: 10 },
-    };
-
-    await fetchAdapter(config);
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      'https://api.example.com/search?q=test&limit=10',
-      expect.any(Object)
-    );
-  });
-
-  it('should handle different response types', async () => {
-    // Test blob response
-    const mockBlob = new Blob(['test']);
-    const blobResponse = {
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: new Headers(),
-      blob: vi.fn().mockResolvedValue(mockBlob),
-    };
-    mockFetch.mockResolvedValueOnce(blobResponse);
-
-    const blobResult = await fetchAdapter({
-      url: 'https://api.example.com/file',
-      responseType: 'blob',
-    });
-    expect(blobResult.data).toBe(mockBlob);
-
-    // Test arraybuffer response
-    const mockArrayBuffer = new ArrayBuffer(8);
-    const arrayBufferResponse = {
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: new Headers(),
-      arrayBuffer: vi.fn().mockResolvedValue(mockArrayBuffer),
-    };
-    mockFetch.mockResolvedValueOnce(arrayBufferResponse);
-
-    const arrayBufferResult = await fetchAdapter({
-      url: 'https://api.example.com/buffer',
-      responseType: 'arraybuffer',
-    });
-    expect(arrayBufferResult.data).toBe(mockArrayBuffer);
-
-    // Test stream response
-    const mockStream = new ReadableStream();
-    const streamResponse = {
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: new Headers(),
-      body: mockStream,
-    };
-    mockFetch.mockResolvedValueOnce(streamResponse);
-
-    const streamResult = await fetchAdapter({
-      url: 'https://api.example.com/stream',
-      responseType: 'stream',
-    });
-    expect(streamResult.data).toBe(mockStream);
-  });
-
-  it('should handle JSON parsing errors', async () => {
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: new Headers({ 'content-type': 'application/json' }),
-      json: vi.fn().mockRejectedValue(new Error('Invalid JSON')),
-      text: vi.fn().mockResolvedValue('Invalid JSON'),
-    };
-    mockFetch.mockResolvedValue(mockResponse);
-
-    const response = await fetchAdapter({
-      url: 'https://api.example.com/test',
-      responseType: 'json',
+      assert.strictEqual(lastFetchCall.options.method, 'POST');
+      assert.strictEqual(lastFetchCall.options.body, JSON.stringify(config.data));
     });
 
-    expect(response.data).toBe('Invalid JSON');
+    it('should handle PUT requests', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data/1',
+        method: 'PUT',
+        data: { updated: true },
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.method, 'PUT');
+      assert.strictEqual(lastFetchCall.options.body, JSON.stringify(config.data));
+    });
+
+    it('should handle DELETE requests', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data/1',
+        method: 'DELETE',
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.method, 'DELETE');
+      assert.strictEqual(lastFetchCall.options.body, undefined);
+    });
+
+    it('should handle PATCH requests', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data/1',
+        method: 'PATCH',
+        data: { field: 'value' },
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.method, 'PATCH');
+      assert.strictEqual(lastFetchCall.options.body, JSON.stringify(config.data));
+    });
+
+    it('should handle HEAD requests without body', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        method: 'HEAD',
+        data: { should: 'be ignored' },
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.method, 'HEAD');
+      assert.strictEqual(lastFetchCall.options.body, undefined);
+    });
+
+    it('should handle OPTIONS requests', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        method: 'OPTIONS',
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.method, 'OPTIONS');
+    });
   });
 
-  it('should handle timeout', async () => {
-    const config: FluxHTTPRequestConfig = {
-      url: 'https://api.example.com/test',
-      timeout: 100,
-    };
+  describe('URL handling', () => {
+    it('should reject when URL is missing', async (): Promise<void> => {
+      await assert.rejects(async () => await fetchAdapter({ method: 'GET' }), {
+        code: 'ERR_INVALID_URL',
+      });
+    });
 
-    let timeoutId: NodeJS.Timeout;
-    mockFetch.mockImplementation(() => {
-      return new Promise((resolve) => {
-        timeoutId = setTimeout(
+    it('should build URL with query params', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        params: { id: 123, name: 'test' },
+      };
+
+      await fetchAdapter(config);
+
+      assert(lastFetchCall.url.includes('id=123'));
+      assert(lastFetchCall.url.includes('name=test'));
+    });
+
+    it('should handle URLs with existing query params', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data?existing=true',
+        params: { new: 'param' },
+      };
+
+      await fetchAdapter(config);
+
+      assert(lastFetchCall.url.includes('existing=true'));
+      assert(lastFetchCall.url.includes('new=param'));
+    });
+  });
+
+  describe('Headers handling', () => {
+    it('should set custom headers', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        headers: {
+          'X-Custom': 'value',
+          Authorization: 'Bearer token',
+        },
+      };
+
+      await fetchAdapter(config);
+
+      const headers = lastFetchCall.options.headers;
+      assert(headers.get('x-custom') === 'value');
+      assert(headers.get('authorization') === 'Bearer token');
+    });
+
+    it('should handle array header values', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        headers: {
+          'X-Multiple': ['value1', 'value2', 'value3'],
+        },
+      };
+
+      await fetchAdapter(config);
+
+      const headers = lastFetchCall.options.headers;
+      assert.strictEqual(headers.get('x-multiple'), 'value1, value2, value3');
+    });
+
+    it('should ignore undefined header values', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        headers: {
+          'X-Defined': 'value',
+          'X-Undefined': undefined,
+        },
+      };
+
+      await fetchAdapter(config);
+
+      const headers = lastFetchCall.options.headers;
+      assert(headers.has('x-defined'));
+      assert(!headers.has('x-undefined'));
+    });
+  });
+
+  describe('Response types', () => {
+    it('should handle JSON response type', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        responseType: 'json',
+      };
+
+      mockFetchResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Map(),
+        json: async (): Promise<any> => ({ json: 'data' }),
+        text: async () => 'fallback',
+      };
+
+      const response = await fetchAdapter(config);
+      assert.deepStrictEqual(response.data, { json: 'data' });
+    });
+
+    it('should handle text response type', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        responseType: 'text',
+      };
+
+      mockFetchResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Map(),
+        text: async () => 'plain text response',
+      };
+
+      const response = await fetchAdapter(config);
+      assert.strictEqual(response.data, 'plain text response');
+    });
+
+    it('should handle blob response type', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        responseType: 'blob',
+      };
+
+      const blob = new Blob(['blob data']);
+      mockFetchResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Map(),
+        blob: async () => blob,
+      };
+
+      const response = await fetchAdapter(config);
+      assert.strictEqual(response.data, blob);
+    });
+
+    it('should handle arraybuffer response type', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        responseType: 'arraybuffer',
+      };
+
+      const buffer = new ArrayBuffer(8);
+      mockFetchResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Map(),
+        arrayBuffer: async () => buffer,
+      };
+
+      const response = await fetchAdapter(config);
+      assert.strictEqual(response.data, buffer);
+    });
+
+    it('should handle stream response type', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        responseType: 'stream',
+      };
+
+      const stream = new ReadableStream();
+      mockFetchResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Map(),
+        body: stream,
+      };
+
+      const response = await fetchAdapter(config);
+      assert.strictEqual(response.data, stream);
+    });
+
+    it('should auto-detect JSON from content-type', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+      };
+
+      mockFetchResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Map([['content-type', 'application/json; charset=utf-8']]),
+        json: async (): Promise<any> => ({ auto: 'detected' }),
+        text: async () => '{"auto":"detected"}',
+      };
+
+      const response = await fetchAdapter(config);
+      assert.deepStrictEqual(response.data, { auto: 'detected' });
+    });
+
+    it('should fallback to text when JSON parsing fails', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        responseType: 'json',
+      };
+
+      mockFetchResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Map(),
+        json: async () => {
+          throw new Error('Invalid JSON');
+        },
+        text: async () => 'not json',
+      };
+
+      const response = await fetchAdapter(config);
+      assert.strictEqual(response.data, 'not json');
+    });
+  });
+
+  describe('Request body handling', () => {
+    it('should send FormData as-is', async (): Promise<void> => {
+      const formData = new FormData();
+      formData.append('field', 'value');
+
+      const config = {
+        url: 'https://api.test.com/data',
+        method: 'POST',
+        data: formData,
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.body, formData);
+    });
+
+    it('should send URLSearchParams as-is', async (): Promise<void> => {
+      const params = new URLSearchParams({ key: 'value' });
+
+      const config = {
+        url: 'https://api.test.com/data',
+        method: 'POST',
+        data: params,
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.body, params);
+    });
+
+    it('should send Blob as-is', async (): Promise<void> => {
+      const blob = new Blob(['blob content']);
+
+      const config = {
+        url: 'https://api.test.com/data',
+        method: 'POST',
+        data: blob,
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.body, blob);
+    });
+
+    it('should send string as-is', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        method: 'POST',
+        data: 'plain text data',
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.body, 'plain text data');
+    });
+
+    it('should stringify objects', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        method: 'POST',
+        data: { complex: { nested: 'object' } },
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.body, JSON.stringify(config.data));
+    });
+
+    it('should handle null data', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        method: 'POST',
+        data: null,
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.body, undefined);
+    });
+  });
+
+  describe('Credentials handling', () => {
+    it('should set credentials to include when withCredentials is true', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        withCredentials: true,
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.credentials, 'include');
+    });
+
+    it('should set credentials to same-origin by default', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+      };
+
+      await fetchAdapter(config);
+
+      assert.strictEqual(lastFetchCall.options.credentials, 'same-origin');
+    });
+  });
+
+  describe('Error handling', () => {
+    it('should reject on non-2xx status by default', async (): Promise<void> => {
+      mockFetchResponse = {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: new Map(),
+        json: async (): Promise<any> => ({ error: 'Not found' }),
+        text: async () => '{"error":"Not found"}',
+      };
+
+      await assert.rejects(async () => await fetchAdapter({ url: 'https://api.test.com/data' }), {
+        code: 'ERR_BAD_RESPONSE',
+      });
+    });
+
+    it('should use validateStatus when provided', async (): Promise<void> => {
+      mockFetchResponse = {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: new Map(),
+        json: async (): Promise<any> => ({ error: 'Not found' }),
+        text: async () => '{"error":"Not found"}',
+      };
+
+      const config = {
+        url: 'https://api.test.com/data',
+        validateStatus: (status) => status < 500,
+      };
+
+      const response = await fetchAdapter(config);
+      assert.strictEqual(response.status, 404);
+    });
+
+    it('should handle network errors', async (): Promise<void> => {
+      mockFetchError = new Error('Network error: Failed to fetch');
+
+      await assert.rejects(async () => await fetchAdapter({ url: 'https://api.test.com/data' }), {
+        code: 'ERR_NETWORK',
+      });
+    });
+
+    it('should handle abort errors as timeout', async (): Promise<void> => {
+      mockFetchError = new Error('AbortError');
+      mockFetchError.name = 'AbortError';
+
+      await assert.rejects(async () => await fetchAdapter({ url: 'https://api.test.com/data' }), {
+        code: 'ECONNABORTED',
+      });
+    });
+
+    it('should handle unknown errors', async (): Promise<void> => {
+      mockFetchError = 'string error';
+
+      await assert.rejects(async () => await fetchAdapter({ url: 'https://api.test.com/data' }), {
+        code: 'ERR_UNKNOWN',
+      });
+    });
+  });
+
+  describe('Timeout handling', () => {
+    it('should timeout after specified duration', async (): Promise<void> => {
+      let resolveFetch;
+      mockFetchResponse = new Promise((_resolve) => {
+        resolveFetch = resolve;
+      });
+
+      const config = {
+        url: 'https://api.test.com/data',
+        timeout: 100,
+      };
+
+      const startTime = Date.now();
+
+      await assert.rejects(async () => await fetchAdapter(config), { code: 'ECONNABORTED' });
+
+      const duration = Date.now() - startTime;
+      assert(duration >= 90 && duration < 200, `Timeout duration was ${duration}ms`);
+    });
+
+    it('should clear timeout on successful response', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        timeout: 1000,
+      };
+
+      const response = await fetchAdapter(config);
+      assert(response);
+
+      // Wait a bit to ensure no timeout occurs
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+  });
+
+  describe('Cancel token handling', () => {
+    it('should reject if already canceled', async (): Promise<void> => {
+      const cancelToken = {
+        throwIfRequested: () => {
+          const error = new Error('Canceled');
+          error.code = 'ERR_CANCELED';
+          throw error;
+        },
+        promise: Promise.resolve(),
+      };
+
+      await assert.rejects(
+        async () =>
+          await fetchAdapter({
+            url: 'https://api.test.com/data',
+            cancelToken,
+          }),
+        { code: 'ERR_CANCELED' }
+      );
+    });
+
+    it('should cancel request when token is triggered', async (): Promise<void> => {
+      let cancelResolve;
+      const cancelToken = {
+        throwIfRequested: () => {},
+        promise: new Promise((_resolve) => {
+          cancelResolve = resolve;
+        }),
+      };
+
+      // Delay the mock response
+      mockFetchResponse = new Promise((_resolve) => {
+        setTimeout(
           () =>
             resolve({
               ok: true,
               status: 200,
               statusText: 'OK',
-              headers: new Headers(),
-              text: vi.fn().mockResolvedValue('should not reach here'),
+              headers: new Map(),
+              json: async (): Promise<any> => ({ test: 'data' }),
             }),
-          200
+          100
         );
       });
-    });
 
-    await expect(fetchAdapter(config)).rejects.toThrow(/timeout/i);
-    clearTimeout(timeoutId!);
-  });
-
-  it('should handle abort signal', async () => {
-    const controller = new AbortController();
-    const config: FluxHTTPRequestConfig = {
-      url: 'https://api.example.com/test',
-      signal: controller.signal,
-    };
-
-    mockFetch.mockImplementation((url, options) => {
-      return new Promise((resolve, reject) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        options.signal.addEventListener('abort', () => {
-          reject(new DOMException('The user aborted a request.', 'AbortError'));
-        });
+      const requestPromise = fetchAdapter({
+        url: 'https://api.test.com/data',
+        cancelToken,
       });
+
+      // Cancel after a short delay
+      setTimeout(() => {
+        cancelResolve({ message: 'User canceled' });
+      }, 50);
+
+      await assert.rejects(async () => await requestPromise, { code: 'ERR_CANCELED' });
+    });
+  });
+
+  describe('Response parsing edge cases', () => {
+    it('should handle empty response body', async (): Promise<void> => {
+      mockFetchResponse = {
+        ok: true,
+        status: 204,
+        statusText: 'No Content',
+        headers: new Map(),
+        text: async () => '',
+      };
+
+      const response = await fetchAdapter({ url: 'https://api.test.com/data' });
+      assert.strictEqual(response.data, '');
     });
 
-    const promise = fetchAdapter(config);
-    controller.abort();
+    it('should handle response headers', async (): Promise<void> => {
+      mockFetchResponse = {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Map([
+          ['content-type', 'application/json'],
+          ['x-custom-header', 'value'],
+          ['cache-control', 'no-cache'],
+        ]),
+        json: async (): Promise<any> => ({ test: 'data' }),
+      };
 
-    await expect(promise).rejects.toThrow(/aborted/i);
-  });
+      const response = await fetchAdapter({ url: 'https://api.test.com/data' });
 
-  it('should handle credentials option', async () => {
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: new Headers(),
-      text: vi.fn().mockResolvedValue('test'),
-    };
-    mockFetch.mockResolvedValue(mockResponse);
-
-    await fetchAdapter({
-      url: 'https://api.example.com/test',
-      withCredentials: true,
+      assert.strictEqual(response.headers['content-type'], 'application/json');
+      assert.strictEqual(response.headers['x-custom-header'], 'value');
+      assert.strictEqual(response.headers['cache-control'], 'no-cache');
     });
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        credentials: 'include',
-      })
-    );
-  });
-
-  it('should handle network errors', async () => {
-    mockFetch.mockRejectedValue(new Error('Network error'));
-
-    const config: FluxHTTPRequestConfig = {
-      url: 'https://api.example.com/test',
-    };
-
-    await expect(fetchAdapter(config)).rejects.toThrow(/network/i);
-  });
-
-  it('should handle non-2xx status codes', async () => {
-    const mockResponse = {
-      ok: false,
-      status: 404,
-      statusText: 'Not Found',
-      headers: new Headers(),
-      text: vi.fn().mockResolvedValue('Not found'),
-    };
-    mockFetch.mockResolvedValue(mockResponse);
-
-    const config: FluxHTTPRequestConfig = {
-      url: 'https://api.example.com/test',
-    };
-
-    await expect(fetchAdapter(config)).rejects.toThrow(/404/);
-  });
-
-  it('should use custom validateStatus', async () => {
-    const mockResponse = {
-      ok: false,
-      status: 404,
-      statusText: 'Not Found',
-      headers: new Headers(),
-      text: vi.fn().mockResolvedValue('Not found'),
-    };
-    mockFetch.mockResolvedValue(mockResponse);
-
-    const config: FluxHTTPRequestConfig = {
-      url: 'https://api.example.com/test',
-      validateStatus: (status) => status < 500,
-    };
-
-    const response = await fetchAdapter(config);
-    expect(response.status).toBe(404);
-  });
-
-  it('should reject when URL is not provided', async () => {
-    const config: FluxHTTPRequestConfig = {};
-
-    await expect(fetchAdapter(config)).rejects.toThrow(/URL is required/);
-  });
-
-  it('should handle unknown errors', async () => {
-    mockFetch.mockRejectedValue('Unknown error');
-
-    const config: FluxHTTPRequestConfig = {
-      url: 'https://api.example.com/test',
-    };
-
-    await expect(fetchAdapter(config)).rejects.toThrow(/Unknown error/);
-  });
-
-  it('should handle text response by default', async () => {
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: new Headers(),
-      text: vi.fn().mockResolvedValue('plain text response'),
-    };
-    mockFetch.mockResolvedValue(mockResponse);
-
-    const response = await fetchAdapter({
-      url: 'https://api.example.com/test',
+    it('should include original request in response', async (): Promise<void> => {
+      const response = await fetchAdapter({ url: 'https://api.test.com/data' });
+      assert(response.request);
     });
 
-    expect(response.data).toBe('plain text response');
+    it('should include config in response', async (): Promise<void> => {
+      const config = {
+        url: 'https://api.test.com/data',
+        method: 'POST',
+        timeout: 5000,
+      };
+
+      const response = await fetchAdapter(config);
+      assert.strictEqual(response.config, config);
+    });
   });
 
-  it('should skip body for GET and HEAD requests', async () => {
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: new Headers(),
-      text: vi.fn().mockResolvedValue('test'),
-    };
-    mockFetch.mockResolvedValue(mockResponse);
+  describe('Method normalization', () => {
+    it('should uppercase method names', async (): Promise<void> => {
+      const methods = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
 
-    await fetchAdapter({
-      url: 'https://api.example.com/test',
-      method: 'GET',
-      data: 'should be ignored',
+      for (const method of methods) {
+        await fetchAdapter({ url: 'https://api.test.com/data', method });
+        assert.strictEqual(lastFetchCall.options.method, method.toUpperCase());
+      }
     });
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.any(String),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      expect.not.objectContaining({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        body: expect.anything(),
-      })
-    );
-
-    mockFetch.mockClear();
-
-    await fetchAdapter({
-      url: 'https://api.example.com/test',
-      method: 'HEAD',
-      data: 'should be ignored',
-    });
-
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.any(String),
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      expect.not.objectContaining({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        body: expect.anything(),
-      })
-    );
   });
 });

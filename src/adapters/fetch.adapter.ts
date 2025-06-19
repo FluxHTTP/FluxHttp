@@ -1,12 +1,70 @@
-import type { FluxHTTPRequestConfig, FluxHTTPResponse } from '../types';
-import { createError, createTimeoutError, createNetworkError, createCancelError } from '../errors';
+import type { fluxhttpRequestConfig, fluxhttpResponse } from '../types';
+import {
+  createError,
+  createTimeoutError,
+  createNetworkError,
+  createCancelError,
+  createResponseError,
+} from '../errors';
 import { buildURL } from '../utils/url';
 import { transformRequestData } from '../utils/data';
 
+// Type guard for validating response data
+function validateResponseData<T>(data: unknown, responseType?: string): data is T {
+  if (responseType === 'blob') {
+    return data instanceof Blob;
+  }
+  if (responseType === 'arraybuffer') {
+    return data instanceof ArrayBuffer;
+  }
+  if (responseType === 'stream') {
+    return data instanceof ReadableStream || data === null;
+  }
+  // For json and text, we accept any type since they could be anything
+  return true;
+}
+
+// Helper to safely parse response based on type
+async function parseResponse<T>(response: Response, responseType?: string): Promise<T> {
+  let data: unknown;
+
+  if (responseType === 'blob') {
+    data = await response.blob();
+  } else if (responseType === 'arraybuffer') {
+    data = await response.arrayBuffer();
+  } else if (responseType === 'stream') {
+    data = response.body;
+  } else if (responseType === 'json') {
+    try {
+      data = await response.json();
+    } catch {
+      data = await response.text();
+    }
+  } else {
+    // Default behavior: try to parse JSON if content-type is json
+    const contentType = response.headers.get('content-type');
+    if (!responseType && contentType && contentType.includes('application/json')) {
+      try {
+        data = await response.json();
+      } catch {
+        data = await response.text();
+      }
+    } else {
+      data = await response.text();
+    }
+  }
+
+  if (!validateResponseData<T>(data, responseType)) {
+    throw new Error(`Invalid response data type for responseType: ${responseType || 'default'}`);
+  }
+
+  return data;
+}
+
 export function fetchAdapter<T = unknown>(
-  config: FluxHTTPRequestConfig
-): Promise<FluxHTTPResponse<T>> {
-  return new Promise<FluxHTTPResponse<T>>((resolve, reject) => {
+  config: fluxhttpRequestConfig
+): Promise<fluxhttpResponse<T>> {
+  return new Promise<fluxhttpResponse<T>>((resolve, reject) => {
     const executeRequest = async (): Promise<void> => {
       const {
         data,
@@ -17,35 +75,71 @@ export function fetchAdapter<T = unknown>(
         withCredentials,
         responseType,
         signal,
+        cancelToken,
       } = config;
 
       if (!url) {
-        return reject(createError('URL is required', config, 'ERR_INVALID_URL'));
+        return reject(createError('URL is required', 'ERR_INVALID_URL', config));
       }
 
       const fullURL = buildURL(url, config.params);
       const controller = new AbortController();
+
+      // Check if request is already canceled
+      if (cancelToken) {
+        cancelToken.throwIfRequested();
+      }
+
       const fetchSignal = signal || controller.signal;
+
+      // Convert headers to proper format
+      const headersInit: HeadersInit = {};
+      Object.entries(headers).forEach(([key, value]) => {
+        if (value !== undefined) {
+          headersInit[key] = Array.isArray(value) ? value.join(', ') : String(value);
+        }
+      });
 
       const fetchOptions: RequestInit = {
         method: method.toUpperCase(),
-        headers: new Headers(headers as HeadersInit),
+        headers: new Headers(headersInit),
         signal: fetchSignal,
         credentials: withCredentials ? 'include' : 'same-origin',
       };
 
+      // Transform and set request body
       const requestData = transformRequestData(data);
-      if (requestData && method !== 'GET' && method !== 'HEAD') {
-        fetchOptions.body = requestData as BodyInit;
+      if (requestData !== null && !['GET', 'HEAD'].includes(method)) {
+        // Validate request body type
+        if (
+          requestData instanceof FormData ||
+          requestData instanceof URLSearchParams ||
+          requestData instanceof Blob ||
+          requestData instanceof ArrayBuffer ||
+          requestData instanceof ReadableStream ||
+          typeof requestData === 'string'
+        ) {
+          fetchOptions.body = requestData;
+        } else {
+          fetchOptions.body = JSON.stringify(requestData);
+        }
       }
 
+      // Set timeout
       let timeoutId: NodeJS.Timeout | undefined;
-
       if (timeout) {
         timeoutId = setTimeout(() => {
           controller.abort();
           reject(createTimeoutError(config));
         }, timeout);
+      }
+
+      // Cancel token subscription
+      if (cancelToken) {
+        void cancelToken.promise.then((cancel) => {
+          controller.abort();
+          reject(createCancelError(cancel.message, config));
+        });
       }
 
       try {
@@ -55,61 +149,27 @@ export function fetchAdapter<T = unknown>(
           clearTimeout(timeoutId);
         }
 
-        const responseHeaders: Record<string, string> = {};
-        response.headers.forEach((value, key) => {
-          responseHeaders[key.toLowerCase()] = value;
-        });
+        // Parse response data safely
+        const responseData = await parseResponse<T>(response, responseType);
 
-        let responseData: T;
-
-        if (responseType === 'blob') {
-          responseData = (await response.blob()) as T;
-        } else if (responseType === 'arraybuffer') {
-          responseData = (await response.arrayBuffer()) as T;
-        } else if (responseType === 'stream') {
-          responseData = response.body as T;
-        } else if (responseType === 'json') {
-          try {
-            responseData = (await response.json()) as T;
-          } catch {
-            responseData = (await response.text()) as T;
-          }
-        } else {
-          // Default behavior: try to parse JSON if content-type is json
-          const contentType = response.headers.get('content-type');
-          if (!responseType && contentType && contentType.includes('application/json')) {
-            try {
-              responseData = (await response.json()) as T;
-            } catch {
-              responseData = (await response.text()) as T;
-            }
-          } else {
-            responseData = (await response.text()) as T;
-          }
-        }
-
-        const httpResponse: FluxHTTPResponse<T> = {
+        const httpResponse: fluxhttpResponse<T> = {
           data: responseData,
           status: response.status,
           statusText: response.statusText,
-          headers: responseHeaders,
+          headers: Object.fromEntries(Array.from((response.headers as any).entries())),
           config,
-          request: fetchOptions,
+          request: response,
         };
 
-        const validateStatus =
-          config.validateStatus || ((status: number): boolean => status >= 200 && status < 300);
-
-        if (validateStatus(response.status)) {
+        if (config.validateStatus ? config.validateStatus(response.status) : response.ok) {
           resolve(httpResponse);
         } else {
           reject(
-            createError(
-              `Request failed with status code ${response.status}`,
+            createResponseError(
+              `Request failed with status ${response.status}`,
               config,
-              'ERR_BAD_RESPONSE',
-              fetchOptions,
-              httpResponse
+              httpResponse,
+              response
             )
           );
         }
@@ -120,17 +180,18 @@ export function fetchAdapter<T = unknown>(
 
         if (error instanceof Error) {
           if (error.name === 'AbortError') {
-            reject(createCancelError('Request aborted', config));
-          } else {
+            reject(createTimeoutError(config));
+          } else if (error.message.includes('network')) {
             reject(createNetworkError(error.message, config));
+          } else {
+            reject(createError(error.message, 'ERR_NETWORK', config));
           }
         } else {
-          reject(createError('Unknown error occurred', config, 'ERR_UNKNOWN'));
+          reject(createError('Unknown error occurred', 'ERR_UNKNOWN', config));
         }
       }
     };
 
-    // Execute the async request
     void executeRequest();
   });
 }

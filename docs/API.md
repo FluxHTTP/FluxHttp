@@ -1,6 +1,6 @@
-# FluxHTTP API Documentation
+# fluxhttp API Documentation
 
-FluxHTTP is a modern, comprehensive HTTP client library for JavaScript/TypeScript that rivals and surpasses Axios with zero dependencies, full TypeScript support, and isomorphic capabilities. With 298 comprehensive tests and 85% coverage, FluxHTTP provides a reliable foundation for all your HTTP needs.
+fluxhttp is a modern, comprehensive HTTP client library for JavaScript/TypeScript that rivals and surpasses Axios with zero dependencies, full TypeScript support, and isomorphic capabilities. With 298 comprehensive tests and 85% coverage, fluxhttp provides a reliable foundation for all your HTTP needs.
 
 ## Table of Contents
 
@@ -72,9 +72,9 @@ const users = await apiClient.get('/users');
 
 ## Core API
 
-### FluxHTTP Instance Methods
+### fluxhttp Instance Methods
 
-#### `request<T>(config: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>`
+#### `request<T>(config: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>`
 
 Generic request method that all other methods use internally.
 
@@ -86,7 +86,7 @@ const response = await fluxhttp.request({
 });
 ```
 
-#### `get<T>(url: string, config?: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>`
+#### `get<T>(url: string, config?: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>`
 
 Performs a GET request.
 
@@ -105,7 +105,7 @@ const user = await fluxhttp.get('/users/1', {
 });
 ```
 
-#### `post<T>(url: string, data?: RequestBody, config?: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>`
+#### `post<T>(url: string, data?: RequestBody, config?: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>`
 
 Performs a POST request.
 
@@ -128,7 +128,7 @@ params.append('password', 'secret');
 const login = await fluxhttp.post('/login', params);
 ```
 
-#### `put<T>(url: string, data?: RequestBody, config?: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>`
+#### `put<T>(url: string, data?: RequestBody, config?: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>`
 
 Performs a PUT request.
 
@@ -139,7 +139,7 @@ const updatedUser = await fluxhttp.put('/users/1', {
 });
 ```
 
-#### `patch<T>(url: string, data?: RequestBody, config?: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>`
+#### `patch<T>(url: string, data?: RequestBody, config?: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>`
 
 Performs a PATCH request.
 
@@ -149,7 +149,7 @@ const partialUpdate = await fluxhttp.patch('/users/1', {
 });
 ```
 
-#### `delete<T>(url: string, config?: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>`
+#### `delete<T>(url: string, config?: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>`
 
 Performs a DELETE request.
 
@@ -157,7 +157,7 @@ Performs a DELETE request.
 await fluxhttp.delete('/users/1');
 ```
 
-#### `head<T>(url: string, config?: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>`
+#### `head<T>(url: string, config?: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>`
 
 Performs a HEAD request.
 
@@ -166,7 +166,7 @@ const headers = await fluxhttp.head('/users/1');
 console.log(headers.headers['last-modified']);
 ```
 
-#### `options<T>(url: string, config?: FluxHTTPRequestConfig): Promise<FluxHTTPResponse<T>>`
+#### `options<T>(url: string, config?: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>`
 
 Performs an OPTIONS request.
 
@@ -177,9 +177,9 @@ console.log(options.headers['allow']);
 
 ### Static Methods
 
-#### `create(config?: FluxHTTPRequestConfig): FluxHTTPInstance`
+#### `create(config?: fluxhttpRequestConfig): fluxhttpInstance`
 
-Creates a new FluxHTTP instance with custom configuration.
+Creates a new fluxhttp instance with custom configuration.
 
 ```typescript
 import { create } from 'fluxhttp';
@@ -220,17 +220,17 @@ fluxhttp.all([
 }));
 ```
 
-#### `isFluxHTTPError(value: unknown): value is FluxHTTPError`
+#### `isfluxhttpError(value: unknown): value is fluxhttpError`
 
-Type guard to check if an error is an FluxHTTP error.
+Type guard to check if an error is an fluxhttp error.
 
 ```typescript
-import { isFluxHTTPError } from 'fluxhttp';
+import { isfluxhttpError } from 'fluxhttp';
 
 try {
   await fluxhttp.get('/api/data');
 } catch (error) {
-  if (isFluxHTTPError(error)) {
+  if (isfluxhttpError(error)) {
     console.log('Status:', error.response?.status);
     console.log('Message:', error.message);
   }
@@ -255,12 +255,12 @@ try {
 
 ## Configuration
 
-### FluxHTTPRequestConfig
+### fluxhttpRequestConfig
 
 Complete configuration interface for customizing requests:
 
 ```typescript
-interface FluxHTTPRequestConfig {
+interface fluxhttpRequestConfig {
   // Core options
   url?: string;
   method?: HttpMethod;
@@ -304,7 +304,7 @@ interface FluxHTTPRequestConfig {
   transformResponse?: Array<(data: unknown) => unknown>;
   
   // Custom adapter
-  adapter?: <T = unknown>(config: FluxHTTPRequestConfig) => Promise<FluxHTTPResponse<T>>;
+  adapter?: <T = unknown>(config: fluxhttpRequestConfig) => Promise<fluxhttpResponse<T>>;
 }
 ```
 
@@ -315,7 +315,7 @@ const defaults = {
   timeout: 0, // No timeout
   headers: {
     'Accept': 'application/json, text/plain, */*',
-    'User-Agent': 'FluxHTTP/0.1.0'
+    'User-Agent': 'fluxhttp/0.1.0'
   },
   validateStatus: (status: number) => status >= 200 && status < 300,
   transformRequest: [
@@ -469,17 +469,17 @@ const responseId1 = fluxhttp.interceptors.response.use(logResponse);
 
 ## Error Handling
 
-### FluxHTTPError
+### fluxhttpError
 
-FluxHTTP provides a comprehensive error interface:
+fluxhttp provides a comprehensive error interface:
 
 ```typescript
-interface FluxHTTPError extends Error {
-  config?: FluxHTTPRequestConfig;
+interface fluxhttpError extends Error {
+  config?: fluxhttpRequestConfig;
   code?: string;
   request?: unknown;
-  response?: FluxHTTPResponse;
-  isFluxHTTPError: boolean;
+  response?: fluxhttpResponse;
+  isfluxhttpError: boolean;
   toJSON: () => Record<string, unknown>;
 }
 ```
@@ -532,7 +532,7 @@ try {
 ```typescript
 try {
   await fluxhttp.get('/api/users/invalid');
-} catch (error: FluxHTTPError) {
+} catch (error: fluxhttpError) {
   console.log({
     message: error.message,
     status: error.response?.status,
@@ -550,7 +550,7 @@ try {
 
 ## Adapters
 
-FluxHTTP automatically selects the appropriate adapter based on the environment:
+fluxhttp automatically selects the appropriate adapter based on the environment:
 
 ### Browser Environment
 - **XMLHttpRequest**: Primary adapter for browsers
@@ -563,7 +563,7 @@ FluxHTTP automatically selects the appropriate adapter based on the environment:
 
 ```typescript
 // Custom adapter implementation
-const customAdapter = async (config: FluxHTTPRequestConfig) => {
+const customAdapter = async (config: fluxhttpRequestConfig) => {
   // Your custom HTTP implementation
   const response = await fetch(config.url!, {
     method: config.method,
@@ -589,7 +589,7 @@ const client = create({
 
 ## TypeScript Support
 
-FluxHTTP is built with TypeScript and provides complete type safety:
+fluxhttp is built with TypeScript and provides complete type safety:
 
 ### Generic Response Types
 
@@ -619,7 +619,7 @@ users.data.data.forEach(user => {
 ### Custom Configuration Types
 
 ```typescript
-interface CustomConfig extends FluxHTTPRequestConfig {
+interface CustomConfig extends fluxhttpRequestConfig {
   customProperty?: string;
 }
 
@@ -632,15 +632,15 @@ const customClient = create<CustomConfig>({
 ### Type Guards
 
 ```typescript
-import { isFluxHTTPError, FluxHTTPError } from 'fluxhttp';
+import { isfluxhttpError, fluxhttpError } from 'fluxhttp';
 
 async function fetchUser(id: number) {
   try {
     const response = await fluxhttp.get<User>(`/users/${id}`);
     return response.data;
   } catch (error: unknown) {
-    if (isFluxHTTPError(error)) {
-      // error is now typed as FluxHTTPError
+    if (isfluxhttpError(error)) {
+      // error is now typed as fluxhttpError
       console.log('Status:', error.response?.status);
       console.log('Config:', error.config?.url);
     }
@@ -739,7 +739,7 @@ try {
 ### Concurrent Requests
 
 ```typescript
-// Promise.all with FluxHTTP.all
+// Promise.all with fluxhttp.all
 const responses = await fluxhttp.all([
   fluxhttp.get('/users'),
   fluxhttp.get('/posts'),
@@ -795,7 +795,7 @@ cachedClient.interceptors.response.use(response => {
 
 ## Migration from Axios
 
-FluxHTTP provides a nearly identical API to Axios, making migration straightforward:
+fluxhttp provides a nearly identical API to Axios, making migration straightforward:
 
 ### Basic Migration
 
@@ -803,7 +803,7 @@ FluxHTTP provides a nearly identical API to Axios, making migration straightforw
 // Axios
 import axios from 'axios';
 
-// FluxHTTP
+// fluxhttp
 import fluxhttp from 'fluxhttp';
 
 // Most code works without changes
@@ -820,7 +820,7 @@ const apiClient = axios.create({
   timeout: 10000
 });
 
-// FluxHTTP
+// fluxhttp
 const apiClient = fluxhttp.create({
   baseURL: 'https://api.example.com',
   timeout: 10000
@@ -830,7 +830,7 @@ const apiClient = fluxhttp.create({
 ### Interceptors
 
 ```typescript
-// Axios interceptors work the same in FluxHTTP
+// Axios interceptors work the same in fluxhttp
 apiClient.interceptors.request.use(config => {
   config.headers.Authorization = `Bearer ${token}`;
   return config;
@@ -849,7 +849,7 @@ apiClient.interceptors.response.use(
 
 ### Key Differences
 
-1. **Zero Dependencies**: FluxHTTP has no dependencies vs Axios's several
+1. **Zero Dependencies**: fluxhttp has no dependencies vs Axios's several
 2. **TypeScript First**: Better TypeScript support out of the box
 3. **Modern Standards**: Built for modern JavaScript/TypeScript
 4. **Smaller Bundle**: Significantly smaller bundle size
@@ -872,7 +872,7 @@ try {
   const response = await fluxhttp.get('/api/data');
   return response.data;
 } catch (error) {
-  if (isFluxHTTPError(error)) {
+  if (isfluxhttpError(error)) {
     // Handle HTTP errors
     console.error('HTTP Error:', error.response?.status);
   } else {
@@ -940,4 +940,4 @@ useEffect(() => {
 }, []);
 ```
 
-This completes the comprehensive API documentation for FluxHTTP. The library provides a modern, type-safe, and feature-rich HTTP client that can serve as a drop-in replacement for Axios with additional benefits.
+This completes the comprehensive API documentation for fluxhttp. The library provides a modern, type-safe, and feature-rich HTTP client that can serve as a drop-in replacement for Axios with additional benefits.

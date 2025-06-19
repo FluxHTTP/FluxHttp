@@ -1,5 +1,5 @@
 /**
- * FluxHTTP Examples Runner
+ * fluxhttp Examples Runner
  * Runs all example scripts with proper separation and error handling
  */
 
@@ -43,8 +43,8 @@ async function runExampleSafely(exampleName, exampleFunction) {
 
 // Main runner function
 async function runAllExamples() {
-  console.log('🚀 FluxHTTP Examples Runner');
-  console.log('This script demonstrates FluxHTTP\'s capabilities through various examples');
+  console.log('🚀 fluxhttp Examples Runner');
+  console.log('This script demonstrates fluxhttp\'s capabilities through various examples');
   console.log('Some examples may fail due to network conditions or rate limiting - this is normal');
   
   const startTime = Date.now();
@@ -107,7 +107,7 @@ async function runAllExamples() {
   console.log('node examples/performance-testing.js');
   console.log('node examples/real-world-scenarios.js');
   
-  console.log('\n✨ FluxHTTP Examples Demo Complete!');
+  console.log('\n✨ fluxhttp Examples Demo Complete!');
 }
 
 // Individual example runners for selective execution
@@ -158,7 +158,7 @@ async function main() {
       await runRealWorldExamples();
       break;
     case 'help':
-      console.log('FluxHTTP Examples Runner');
+      console.log('fluxhttp Examples Runner');
       console.log('');
       console.log('Usage:');
       console.log('  node run-all-examples.js [command]');
