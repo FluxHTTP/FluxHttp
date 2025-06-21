@@ -12,7 +12,12 @@ import { mergeConfig } from './mergeConfig';
 import { buildFullPath } from '../utils/url';
 import { defaults } from './defaults';
 
-// Type guard to validate HTTP method
+/**
+ * Type guard to validate HTTP method
+ * @internal
+ * @param {string} method - HTTP method to validate
+ * @returns {boolean} True if method is valid HTTP method
+ */
 function isValidHttpMethod(method: string): method is HttpMethod {
   const validMethods: readonly string[] = [
     'GET',
@@ -26,14 +31,51 @@ function isValidHttpMethod(method: string): method is HttpMethod {
   return validMethods.includes(method.toUpperCase());
 }
 
+/**
+ * Main fluxhttp class for making HTTP requests
+ * @class fluxhttp
+ * @implements {fluxhttpInstance}
+ *
+ * @example
+ * ```typescript
+ * const client = new fluxhttp({
+ *   baseURL: 'https://api.example.com',
+ *   timeout: 5000
+ * });
+ *
+ * const response = await client.get('/users');
+ * ```
+ */
 export class fluxhttp implements fluxhttpInstance {
+  /**
+   * Default configuration for all requests
+   * @type {fluxhttpRequestConfig}
+   */
   defaults: fluxhttpRequestConfig;
+
+  /**
+   * Request and response interceptor managers
+   * @type {Object}
+   * @property {InterceptorManager<fluxhttpRequestConfig>} request - Request interceptors
+   * @property {InterceptorManager<fluxhttpResponse>} response - Response interceptors
+   */
   interceptors: {
     request: InterceptorManager<fluxhttpRequestConfig>;
     response: InterceptorManager<fluxhttpResponse>;
   };
+
+  /**
+   * HTTP adapter for making requests
+   * @private
+   * @type {Adapter}
+   */
   private adapter: Adapter;
 
+  /**
+   * Create a new fluxhttp instance
+   * @constructor
+   * @param {fluxhttpRequestConfig} [defaultConfig={}] - Default configuration
+   */
   constructor(defaultConfig: fluxhttpRequestConfig = {}) {
     // Handle null/undefined config
     const safeConfig = defaultConfig || {};
@@ -45,6 +87,27 @@ export class fluxhttp implements fluxhttpInstance {
     this.adapter = safeConfig.adapter || getDefaultAdapter();
   }
 
+  /**
+   * Make an HTTP request
+   * @async
+   * @template T - Response data type
+   * @param {fluxhttpRequestConfig|string} configOrUrl - Request configuration object or URL string
+   * @returns {Promise<fluxhttpResponse<T>>} Promise resolving to response
+   * @throws {Error} If URL is invalid or missing
+   * @throws {Error} If HTTP method is invalid
+   * @example
+   * ```typescript
+   * // Using config object
+   * const response = await client.request({
+   *   method: 'GET',
+   *   url: '/api/users',
+   *   params: { page: 1 }
+   * });
+   *
+   * // Using URL string (defaults to GET)
+   * const response = await client.request('/api/users');
+   * ```
+   */
   async request<T = unknown>(config: fluxhttpRequestConfig): Promise<fluxhttpResponse<T>>;
   async request<T = unknown>(url: string): Promise<fluxhttpResponse<T>>;
   async request<T = unknown>(
@@ -96,6 +159,21 @@ export class fluxhttp implements fluxhttpInstance {
     );
   }
 
+  /**
+   * Make a GET request
+   * @async
+   * @template T - Response data type
+   * @param {string} url - Request URL
+   * @param {fluxhttpRequestConfig} [config] - Additional configuration
+   * @returns {Promise<fluxhttpResponse<T>>} Promise resolving to response
+   * @example
+   * ```typescript
+   * const users = await client.get('/api/users');
+   * const user = await client.get('/api/users/123', {
+   *   headers: { 'Accept': 'application/json' }
+   * });
+   * ```
+   */
   async get<T = unknown>(
     url: string,
     config?: fluxhttpRequestConfig
@@ -103,6 +181,18 @@ export class fluxhttp implements fluxhttpInstance {
     return this.request<T>(mergeConfig(config || {}, { method: 'GET', url }));
   }
 
+  /**
+   * Make a DELETE request
+   * @async
+   * @template T - Response data type
+   * @param {string} url - Request URL
+   * @param {fluxhttpRequestConfig} [config] - Additional configuration
+   * @returns {Promise<fluxhttpResponse<T>>} Promise resolving to response
+   * @example
+   * ```typescript
+   * await client.delete('/api/users/123');
+   * ```
+   */
   async delete<T = unknown>(
     url: string,
     config?: fluxhttpRequestConfig
@@ -110,6 +200,18 @@ export class fluxhttp implements fluxhttpInstance {
     return this.request<T>(mergeConfig(config || {}, { method: 'DELETE', url }));
   }
 
+  /**
+   * Make a HEAD request
+   * @async
+   * @template T - Response data type
+   * @param {string} url - Request URL
+   * @param {fluxhttpRequestConfig} [config] - Additional configuration
+   * @returns {Promise<fluxhttpResponse<T>>} Promise resolving to response
+   * @example
+   * ```typescript
+   * const headers = await client.head('/api/resource');
+   * ```
+   */
   async head<T = unknown>(
     url: string,
     config?: fluxhttpRequestConfig
@@ -117,6 +219,18 @@ export class fluxhttp implements fluxhttpInstance {
     return this.request<T>(mergeConfig(config || {}, { method: 'HEAD', url }));
   }
 
+  /**
+   * Make an OPTIONS request
+   * @async
+   * @template T - Response data type
+   * @param {string} url - Request URL
+   * @param {fluxhttpRequestConfig} [config] - Additional configuration
+   * @returns {Promise<fluxhttpResponse<T>>} Promise resolving to response
+   * @example
+   * ```typescript
+   * const options = await client.options('/api/resource');
+   * ```
+   */
   async options<T = unknown>(
     url: string,
     config?: fluxhttpRequestConfig
@@ -124,6 +238,22 @@ export class fluxhttp implements fluxhttpInstance {
     return this.request<T>(mergeConfig(config || {}, { method: 'OPTIONS', url }));
   }
 
+  /**
+   * Make a POST request
+   * @async
+   * @template T - Response data type
+   * @param {string} url - Request URL
+   * @param {RequestBody} [data] - Request body data
+   * @param {fluxhttpRequestConfig} [config] - Additional configuration
+   * @returns {Promise<fluxhttpResponse<T>>} Promise resolving to response
+   * @example
+   * ```typescript
+   * const newUser = await client.post('/api/users', {
+   *   name: 'John Doe',
+   *   email: 'john@example.com'
+   * });
+   * ```
+   */
   async post<T = unknown>(
     url: string,
     data?: RequestBody,
@@ -132,6 +262,22 @@ export class fluxhttp implements fluxhttpInstance {
     return this.request<T>(mergeConfig(config || {}, { method: 'POST', url, data }));
   }
 
+  /**
+   * Make a PUT request
+   * @async
+   * @template T - Response data type
+   * @param {string} url - Request URL
+   * @param {RequestBody} [data] - Request body data
+   * @param {fluxhttpRequestConfig} [config] - Additional configuration
+   * @returns {Promise<fluxhttpResponse<T>>} Promise resolving to response
+   * @example
+   * ```typescript
+   * const updatedUser = await client.put('/api/users/123', {
+   *   name: 'Jane Doe',
+   *   email: 'jane@example.com'
+   * });
+   * ```
+   */
   async put<T = unknown>(
     url: string,
     data?: RequestBody,
@@ -140,6 +286,21 @@ export class fluxhttp implements fluxhttpInstance {
     return this.request<T>(mergeConfig(config || {}, { method: 'PUT', url, data }));
   }
 
+  /**
+   * Make a PATCH request
+   * @async
+   * @template T - Response data type
+   * @param {string} url - Request URL
+   * @param {RequestBody} [data] - Request body data
+   * @param {fluxhttpRequestConfig} [config] - Additional configuration
+   * @returns {Promise<fluxhttpResponse<T>>} Promise resolving to response
+   * @example
+   * ```typescript
+   * const partialUpdate = await client.patch('/api/users/123', {
+   *   email: 'newemail@example.com'
+   * });
+   * ```
+   */
   async patch<T = unknown>(
     url: string,
     data?: RequestBody,
@@ -148,11 +309,33 @@ export class fluxhttp implements fluxhttpInstance {
     return this.request<T>(mergeConfig(config || {}, { method: 'PATCH', url, data }));
   }
 
+  /**
+   * Generate the full URI for a request configuration
+   * @param {fluxhttpRequestConfig} [config] - Request configuration
+   * @returns {string} Full request URI
+   * @example
+   * ```typescript
+   * const uri = client.getUri({ url: '/api/users', params: { page: 1 } });
+   * // Returns: 'https://api.example.com/api/users?page=1'
+   * ```
+   */
   getUri(config?: fluxhttpRequestConfig): string {
     config = mergeConfig(this.defaults, config);
     return buildFullPath(config.baseURL, config.url);
   }
 
+  /**
+   * Create a new fluxhttp instance with merged configuration
+   * @param {fluxhttpRequestConfig} [config] - Configuration to merge with defaults
+   * @returns {fluxhttpInstance} New fluxhttp instance
+   * @example
+   * ```typescript
+   * const apiClient = client.create({
+   *   baseURL: 'https://api.example.com/v2',
+   *   headers: { 'X-API-Version': '2.0' }
+   * });
+   * ```
+   */
   create(config?: fluxhttpRequestConfig): fluxhttpInstance {
     const mergedConfig = mergeConfig(this.defaults, config);
     return new fluxhttp(mergedConfig);

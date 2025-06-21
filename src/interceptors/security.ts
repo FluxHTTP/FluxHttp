@@ -1,5 +1,5 @@
 import type { fluxhttpRequestConfig, fluxhttpResponse } from '../types';
-import { SecurityManager, defaultSecurity } from '../core/security';
+import { SecurityManager, defaultSecurity } from '../security';
 
 // Create default security manager instance
 const defaultSecurityManager = new SecurityManager(defaultSecurity);

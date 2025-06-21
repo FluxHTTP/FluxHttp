@@ -1,6 +1,11 @@
 import type { fluxhttpRequestConfig, Headers } from '../types';
 import { isPlainObject, isFormData, isURLSearchParams } from '../utils/data';
 
+/**
+ * Default configuration for fluxhttp requests
+ * @const {fluxhttpRequestConfig} defaults
+ * @description These defaults are merged with user-provided configuration
+ */
 export const defaults: fluxhttpRequestConfig = {
   method: 'GET',
   timeout: 0,

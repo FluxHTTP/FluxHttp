@@ -174,7 +174,7 @@ export function getDataSize(data: unknown): number {
     let size = 0;
     try {
       // Use traditional for...of with Array.from for compatibility
-      const entries = Array.from((data as any).entries()) as [string, any][];
+      const entries = Array.from((data as any).entries());
       for (const [key, value] of entries) {
         size += Polyfills.getByteLength(key, 'utf8');
         if (typeof value === 'string') {

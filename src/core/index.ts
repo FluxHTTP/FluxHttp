@@ -15,3 +15,14 @@ export {
   createSecurityConfig,
   type SecurityConfig,
 } from './security';
+export {
+  CacheManager,
+  defaultCacheManager,
+  createCacheConfig,
+  MemoryCacheStorage,
+  LocalStorageCacheStorage,
+  SessionStorageCacheStorage,
+  CacheApiStorage,
+  type CacheStorage,
+  type CacheEntry,
+} from './cache';
