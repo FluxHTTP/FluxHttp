@@ -1,0 +1,93 @@
+# CODEOWNERS file for FluxHTTP
+# This file defines individuals or teams that are responsible for code reviews
+# in this repository. When a pull request is created, the designated code owners
+# will automatically be requested to review the changes.
+
+# Global fallback owners
+# These users/teams will be requested for review on all files unless overridden
+* @fluxhttp-team
+
+# Core library files - require approval from core maintainers
+/src/ @fluxhttp-team @core-maintainers
+/src/core/ @fluxhttp-team @core-maintainers
+
+# Critical core files require additional review
+/src/index.ts @fluxhttp-team @core-maintainers @security-team
+/src/core/fluxhttp.ts @fluxhttp-team @core-maintainers
+/src/core/createfluxhttpinstance.ts @fluxhttp-team @core-maintainers
+
+# Adapter implementations - platform-specific expertise
+/src/adapters/ @fluxhttp-team @adapter-specialists
+/src/adapters/xhr.adapter.ts @fluxhttp-team @browser-specialists
+/src/adapters/fetch.adapter.ts @fluxhttp-team @browser-specialists
+/src/adapters/http.adapter.ts @fluxhttp-team @nodejs-specialists
+
+# Security-related files require security team approval
+/src/security/ @fluxhttp-team @security-team
+/src/interceptors/security.ts @fluxhttp-team @security-team
+/src/core/security.ts @fluxhttp-team @security-team
+
+# Error handling - requires careful review
+/src/errors/ @fluxhttp-team @core-maintainers
+
+# Type definitions - TypeScript experts
+/src/types/ @fluxhttp-team @typescript-specialists
+
+# Interceptor system - complex logic requiring careful review
+/src/interceptors/ @fluxhttp-team @core-maintainers
+/src/interceptors/dispatchRequest.ts @fluxhttp-team @core-maintainers
+
+# Build and configuration files
+/tsconfig*.json @fluxhttp-team @build-specialists
+/tsup.config.ts @fluxhttp-team @build-specialists
+/package.json @fluxhttp-team @core-maintainers
+/package-lock.json @fluxhttp-team
+
+# GitHub workflows and CI/CD
+/.github/ @fluxhttp-team @devops-team
+/.github/workflows/ @fluxhttp-team @devops-team
+/.github/workflows/ci.yml @fluxhttp-team @devops-team @ci-specialists
+/.github/workflows/release.yml @fluxhttp-team @devops-team @release-managers
+/.github/workflows/security.yml @fluxhttp-team @devops-team @security-team
+/.github/workflows/performance.yml @fluxhttp-team @devops-team @performance-specialists
+
+# Dependabot configuration
+/.github/dependabot.yml @fluxhttp-team @devops-team
+
+# Issue and PR templates
+/.github/ISSUE_TEMPLATE/ @fluxhttp-team @community-managers
+/.github/pull_request_template.md @fluxhttp-team @community-managers
+
+# Documentation files
+/docs/ @fluxhttp-team @documentation-team
+/README.md @fluxhttp-team @documentation-team
+/CHANGELOG.md @fluxhttp-team @release-managers
+/CONTRIBUTING.md @fluxhttp-team @community-managers
+/SECURITY.md @fluxhttp-team @security-team
+
+# Test files - require approval from test specialists
+/tests/ @fluxhttp-team @test-specialists
+/tests/unit/ @fluxhttp-team @test-specialists
+/tests/integration/ @fluxhttp-team @test-specialists @integration-specialists
+/tests/security/ @fluxhttp-team @test-specialists @security-team
+
+# Examples and benchmarks
+/examples/ @fluxhttp-team @documentation-team
+/benchmarks/ @fluxhttp-team @performance-specialists
+
+# Scripts require careful review
+/scripts/ @fluxhttp-team @build-specialists
+
+# License and legal files - require legal/admin approval
+/LICENSE @fluxhttp-team @legal-team
+
+# High-impact configuration files
+/.gitignore @fluxhttp-team
+/.npmignore @fluxhttp-team
+/.eslintrc* @fluxhttp-team @code-quality-team
+/.prettierrc* @fluxhttp-team @code-quality-team
+
+# Special handling for critical files that affect the entire project
+# These files require unanimous approval from all core teams
+package.json @fluxhttp-team @core-maintainers @security-team @build-specialists
+/src/index.ts @fluxhttp-team @core-maintainers @security-team @typescript-specialists

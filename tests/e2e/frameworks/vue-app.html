@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FluxHTTP Vue Integration Test</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .status { margin: 10px 0; }
+        .success { color: green; }
+        .error { color: red; }
+        .loading { color: blue; }
+        button { margin: 5px; padding: 10px 15px; cursor: pointer; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        .file-input { margin: 10px 0; }
+        input[type="file"] { margin: 5px; }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+
+    <script>
+        const { createApp, ref, onMounted, computed, reactive } = Vue;
+
+        // FluxHTTP composable
+        function useFluxHttp() {
+            const loading = ref(false);
+            const error = ref(null);
+            const instance = ref(null);
+
+            onMounted(() => {
+                if (window.fluxhttp) {
+                    instance.value = window.fluxhttp.create({
+                        baseURL: 'http://localhost:3000',
+                        timeout: 10000
+                    });
+                }
+            });
+
+            const request = async (config) => {
+                if (!instance.value) {
+                    throw new Error('FluxHTTP not initialized');
+                }
+
+                loading.value = true;
+                error.value = null;
+
+                try {
+                    const response = await instance.value.request(config);
+                    return response.data;
+                } catch (err) {
+                    error.value = err;
+                    throw err;
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            return { request, loading, error, instance };
+        }
+
+        // HTTP Methods component
+        const HttpMethodsTest = {
+            setup() {
+                const { request, loading, error } = useFluxHttp();
+                const results = reactive({});
+
+                const testMethod = async (method, url, data = null) => {
+                    try {
+                        const result = await request({
+                            method,
+                            url,
+                            data
+                        });
+                        results[method] = { success: true, data: result };
+                    } catch (err) {
+                        results[method] = { success: false, error: err.message };
+                    }
+                };
+
+                return {
+                    testMethod,
+                    loading,
+                    error,
+                    results
+                };
+            },
+            template: `
+                <div class="test-section">
+                    <h3>HTTP Methods Test</h3>
+                    <div>
+                        <button @click="testMethod('GET', '/health')">Test GET</button>
+                        <button @click="testMethod('POST', '/echo', { message: 'Hello from Vue' })">Test POST</button>
+                        <button @click="testMethod('PUT', '/echo', { message: 'Updated from Vue' })">Test PUT</button>
+                        <button @click="testMethod('DELETE', '/echo')">Test DELETE</button>
+                    </div>
+                    
+                    <div v-if="loading" class="status loading">Loading...</div>
+                    <div v-if="error" class="status error">Error: {{ error.message }}</div>
+                    
+                    <div>
+                        <div v-for="(result, method) in results" :key="method" 
+                             :class="['status', result.success ? 'success' : 'error']">
+                            {{ method }}: {{ result.success ? 'Success' : \`Error - \${result.error}\` }}
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        // Authentication component
+        const AuthTest = {
+            setup() {
+                const { request } = useFluxHttp();
+                const authStatus = ref('Not authenticated');
+                const token = ref(null);
+
+                const login = async () => {
+                    try {
+                        const result = await request({
+                            method: 'POST',
+                            url: '/auth/login',
+                            data: { username: 'testuser', password: 'testpass' }
+                        });
+                        token.value = result.token;
+                        authStatus.value = 'Authenticated';
+                    } catch (err) {
+                        authStatus.value = `Login failed: ${err.message}`;
+                    }
+                };
+
+                const getProfile = async () => {
+                    if (!token.value) {
+                        authStatus.value = 'No token available';
+                        return;
+                    }
+
+                    try {
+                        const result = await request({
+                            method: 'GET',
+                            url: '/auth/profile',
+                            headers: { Authorization: `Bearer ${token.value}` }
+                        });
+                        authStatus.value = `Profile: ${result.user.username}`;
+                    } catch (err) {
+                        authStatus.value = `Profile failed: ${err.message}`;
+                    }
+                };
+
+                const logout = async () => {
+                    if (!token.value) return;
+
+                    try {
+                        await request({
+                            method: 'POST',
+                            url: '/auth/logout',
+                            headers: { Authorization: `Bearer ${token.value}` }
+                        });
+                        token.value = null;
+                        authStatus.value = 'Logged out';
+                    } catch (err) {
+                        authStatus.value = `Logout failed: ${err.message}`;
+                    }
+                };
+
+                return {
+                    login,
+                    getProfile,
+                    logout,
+                    authStatus,
+                    token
+                };
+            },
+            template: `
+                <div class="test-section">
+                    <h3>Authentication Test</h3>
+                    <div>
+                        <button @click="login">Login</button>
+                        <button @click="getProfile" :disabled="!token">Get Profile</button>
+                        <button @click="logout" :disabled="!token">Logout</button>
+                    </div>
+                    <div class="status">{{ authStatus }}</div>
+                </div>
+            `
+        };
+
+        // File upload component
+        const FileUploadTest = {
+            setup() {
+                const { request, loading } = useFluxHttp();
+                const uploadStatus = ref('No file selected');
+                const selectedFile = ref(null);
+
+                const onFileChange = (event) => {
+                    selectedFile.value = event.target.files[0];
+                    uploadStatus.value = selectedFile.value ? 'File selected' : 'No file selected';
+                };
+
+                const uploadFile = async () => {
+                    if (!selectedFile.value) {
+                        uploadStatus.value = 'Please select a file';
+                        return;
+                    }
+
+                    const formData = new FormData();
+                    formData.append('file', selectedFile.value);
+
+                    try {
+                        const result = await request({
+                            method: 'POST',
+                            url: '/files/upload',
+                            data: formData,
+                            headers: {
+                                'Content-Type': 'multipart/form-data'
+                            }
+                        });
+                        uploadStatus.value = `Upload successful: ${result.filename}`;
+                    } catch (err) {
+                        uploadStatus.value = `Upload failed: ${err.message}`;
+                    }
+                };
+
+                return {
+                    onFileChange,
+                    uploadFile,
+                    uploadStatus,
+                    loading
+                };
+            },
+            template: `
+                <div class="test-section">
+                    <h3>File Upload Test</h3>
+                    <div class="file-input">
+                        <input type="file" @change="onFileChange" />
+                        <button @click="uploadFile" :disabled="loading">
+                            {{ loading ? 'Uploading...' : 'Upload File' }}
+                        </button>
+                    </div>
+                    <div class="status">{{ uploadStatus }}</div>
+                </div>
+            `
+        };
+
+        // Concurrent requests component
+        const ConcurrentTest = {
+            setup() {
+                const { request } = useFluxHttp();
+                const results = ref(null);
+
+                const testConcurrent = async () => {
+                    const startTime = Date.now();
+                    results.value = 'Running...';
+
+                    try {
+                        const requests = Array.from({ length: 10 }, (_, i) =>
+                            request({ method: 'GET', url: `/concurrent/${i}` })
+                        );
+
+                        const responses = await Promise.all(requests);
+                        const endTime = Date.now();
+
+                        results.value = {
+                            success: true,
+                            count: responses.length,
+                            duration: endTime - startTime,
+                            uniqueIds: [...new Set(responses.map(r => r.id))]
+                        };
+                    } catch (err) {
+                        results.value = {
+                            success: false,
+                            error: err.message
+                        };
+                    }
+                };
+
+                const resultsDisplay = computed(() => {
+                    if (typeof results.value === 'string') {
+                        return results.value;
+                    }
+                    if (typeof results.value === 'object' && results.value) {
+                        return JSON.stringify(results.value, null, 2);
+                    }
+                    return '';
+                });
+
+                return {
+                    testConcurrent,
+                    resultsDisplay
+                };
+            },
+            template: `
+                <div class="test-section">
+                    <h3>Concurrent Requests Test</h3>
+                    <button @click="testConcurrent">Test 10 Concurrent Requests</button>
+                    <div class="status">
+                        <pre v-if="resultsDisplay">{{ resultsDisplay }}</pre>
+                    </div>
+                </div>
+            `
+        };
+
+        // Error handling component
+        const ErrorHandlingTest = {
+            setup() {
+                const { request } = useFluxHttp();
+                const errorResults = reactive({});
+
+                const testError = async (statusCode) => {
+                    try {
+                        await request({ method: 'GET', url: `/error/${statusCode}` });
+                        errorResults[statusCode] = 'Unexpected success';
+                    } catch (err) {
+                        errorResults[statusCode] = `Caught: ${err.response?.status || err.message}`;
+                    }
+                };
+
+                return {
+                    testError,
+                    errorResults
+                };
+            },
+            template: `
+                <div class="test-section">
+                    <h3>Error Handling Test</h3>
+                    <div>
+                        <button v-for="code in [400, 401, 404, 500]" :key="code" @click="testError(code)">
+                            Test {{ code }}
+                        </button>
+                    </div>
+                    <div>
+                        <div v-for="(result, code) in errorResults" :key="code" class="status">
+                            {{ code }}: {{ result }}
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        // Real-time data component (using reactive data)
+        const RealTimeTest = {
+            setup() {
+                const { request } = useFluxHttp();
+                const data = ref([]);
+                const isStreaming = ref(false);
+                const streamStatus = ref('Not started');
+
+                const startStreaming = async () => {
+                    isStreaming.value = true;
+                    streamStatus.value = 'Streaming...';
+                    data.value = [];
+
+                    try {
+                        // Simulate real-time data updates
+                        for (let i = 0; i < 5; i++) {
+                            const result = await request({
+                                method: 'GET',
+                                url: `/concurrent/${i}`
+                            });
+                            data.value.push({
+                                id: i,
+                                timestamp: Date.now(),
+                                data: result
+                            });
+                            
+                            // Wait between requests to simulate streaming
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                        }
+                        
+                        streamStatus.value = 'Completed';
+                    } catch (err) {
+                        streamStatus.value = `Error: ${err.message}`;
+                    } finally {
+                        isStreaming.value = false;
+                    }
+                };
+
+                const clearData = () => {
+                    data.value = [];
+                    streamStatus.value = 'Cleared';
+                };
+
+                return {
+                    startStreaming,
+                    clearData,
+                    data,
+                    isStreaming,
+                    streamStatus
+                };
+            },
+            template: `
+                <div class="test-section">
+                    <h3>Real-time Data Test</h3>
+                    <div>
+                        <button @click="startStreaming" :disabled="isStreaming">
+                            {{ isStreaming ? 'Streaming...' : 'Start Stream' }}
+                        </button>
+                        <button @click="clearData" :disabled="isStreaming">Clear Data</button>
+                    </div>
+                    <div class="status">Status: {{ streamStatus }}</div>
+                    <div v-if="data.length > 0">
+                        <h4>Received Data:</h4>
+                        <div v-for="item in data" :key="item.id" class="status">
+                            {{ item.id }}: {{ new Date(item.timestamp).toLocaleTimeString() }}
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        // Main App component
+        const App = {
+            setup() {
+                const fluxHttpReady = ref(false);
+
+                onMounted(() => {
+                    const checkFluxHttp = () => {
+                        if (window.fluxhttp) {
+                            fluxHttpReady.value = true;
+                            window.vueTestResults = {
+                                fluxHttpLoaded: true,
+                                timestamp: Date.now()
+                            };
+                        } else {
+                            setTimeout(checkFluxHttp, 100);
+                        }
+                    };
+                    checkFluxHttp();
+                });
+
+                return {
+                    fluxHttpReady
+                };
+            },
+            components: {
+                HttpMethodsTest,
+                AuthTest,
+                FileUploadTest,
+                ConcurrentTest,
+                ErrorHandlingTest,
+                RealTimeTest
+            },
+            template: `
+                <div class="container">
+                    <div v-if="!fluxHttpReady" class="loading">Loading FluxHTTP...</div>
+                    <div v-else>
+                        <h1>FluxHTTP Vue Integration Test</h1>
+                        <p>Testing FluxHTTP integration with Vue 3 composition API.</p>
+                        
+                        <HttpMethodsTest />
+                        <AuthTest />
+                        <FileUploadTest />
+                        <ConcurrentTest />
+                        <ErrorHandlingTest />
+                        <RealTimeTest />
+                    </div>
+                </div>
+            `
+        };
+
+        // Create Vue app
+        const app = createApp(App);
+        app.mount('#app');
+
+        // Global test utilities
+        window.vueTestUtils = {
+            triggerHttpTest: (method) => {
+                const button = document.querySelector(`button[onclick*="testMethod('${method.toUpperCase()}')"]`);
+                if (button) button.click();
+            },
+            
+            triggerLogin: () => {
+                const button = document.querySelector('button:contains("Login")');
+                if (button) button.click();
+            },
+            
+            getTestResults: () => {
+                return window.vueTestResults || {};
+            },
+            
+            getAppInstance: () => {
+                return app;
+            }
+        };
+    </script>
+</body>
+</html>

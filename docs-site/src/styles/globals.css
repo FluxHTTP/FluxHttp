@@ -1,0 +1,224 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Code highlighting styles */
+.code-block {
+  @apply relative rounded-lg bg-muted p-4 overflow-x-auto;
+}
+
+.code-block pre {
+  @apply m-0 p-0 bg-transparent text-sm;
+}
+
+.code-block code {
+  @apply bg-transparent p-0 text-sm font-mono;
+}
+
+/* Copy button */
+.copy-button {
+  @apply absolute top-2 right-2 p-2 rounded bg-background/80 hover:bg-background transition-colors;
+}
+
+/* Syntax highlighting */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  @apply text-muted-foreground;
+}
+
+.token.punctuation {
+  @apply text-foreground;
+}
+
+.token.namespace {
+  @apply opacity-70;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  @apply text-rose-500;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  @apply text-emerald-500;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  @apply text-amber-500;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  @apply text-blue-500;
+}
+
+.token.function,
+.token.class-name {
+  @apply text-purple-500;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  @apply text-orange-500;
+}
+
+/* Search highlight */
+.search-highlight {
+  @apply bg-yellow-200 dark:bg-yellow-800 px-1 rounded;
+}
+
+/* Scrollbar styling */
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  @apply bg-muted;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
+}
+
+/* Gradient animations */
+.gradient-bg {
+  background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+  background-size: 400% 400%;
+  animation: gradient 15s ease infinite;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Interactive demo styles */
+.demo-container {
+  @apply border rounded-lg p-4 bg-card;
+}
+
+.demo-result {
+  @apply mt-4 p-3 rounded bg-muted border-l-4 border-l-primary;
+}
+
+.demo-error {
+  @apply mt-4 p-3 rounded bg-destructive/10 border-l-4 border-l-destructive text-destructive-foreground;
+}
+
+/* Navigation styles */
+.nav-item {
+  @apply relative px-3 py-2 rounded-md text-sm font-medium transition-colors;
+}
+
+.nav-item:hover {
+  @apply bg-accent text-accent-foreground;
+}
+
+.nav-item.active {
+  @apply bg-primary text-primary-foreground;
+}
+
+.nav-item.active::after {
+  content: '';
+  @apply absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-primary-foreground rounded-full;
+}
+
+/* Smooth transitions */
+.page-transition {
+  @apply transition-all duration-300 ease-in-out;
+}
+
+/* Focus styles */
+.focus-visible {
+  @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+}

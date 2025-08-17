@@ -1,0 +1,174 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior in FluxHTTP
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug! Please fill out the information below to help us understand and reproduce the issue.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      description: Please confirm the following before submitting a bug report
+      options:
+        - label: I have searched existing issues to ensure this bug hasn't been reported
+          required: true
+        - label: I have read the documentation and confirmed this is a bug
+          required: true
+        - label: I am using the latest version of FluxHTTP
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: FluxHTTP Version
+      description: What version of FluxHTTP are you using?
+      placeholder: "e.g., 0.1.0-alpha"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: What environment are you running FluxHTTP in?
+      options:
+        - Node.js
+        - Browser (Chrome)
+        - Browser (Firefox)
+        - Browser (Safari)
+        - Browser (Edge)
+        - React Native
+        - Electron
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js Version (if applicable)
+      description: What version of Node.js are you using?
+      placeholder: "e.g., 18.17.0"
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is
+      placeholder: Describe the bug...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: Describe what you expected...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: Describe what actually happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Please provide detailed steps to reproduce the bug
+      placeholder: |
+        1. Import FluxHTTP with...
+        2. Create a client with...
+        3. Make a request to...
+        4. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: code-sample
+    attributes:
+      label: Code Sample
+      description: Please provide a minimal code sample that reproduces the issue
+      render: javascript
+      placeholder: |
+        import fluxhttp from '@fluxhttp/core';
+        
+        const client = fluxhttp.create({
+          baseURL: 'https://api.example.com'
+        });
+        
+        // Your code that demonstrates the bug
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-message
+    attributes:
+      label: Error Message
+      description: If there's an error message, please include it here
+      render: text
+      placeholder: Paste the complete error message and stack trace
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: FluxHTTP Configuration
+      description: Please share your FluxHTTP configuration (remove sensitive data)
+      render: javascript
+      placeholder: |
+        {
+          baseURL: 'https://api.example.com',
+          timeout: 5000,
+          headers: {
+            'Accept': 'application/json'
+          }
+        }
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context about the problem (screenshots, logs, etc.)
+      placeholder: Add any other context about the problem here
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How severe is this bug?
+      options:
+        - Low - Minor inconvenience
+        - Medium - Affects some functionality
+        - High - Breaks important functionality
+        - Critical - Completely unusable
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: affected-areas
+    attributes:
+      label: Affected Areas
+      description: Which areas of FluxHTTP are affected? (check all that apply)
+      options:
+        - label: HTTP requests (GET, POST, etc.)
+        - label: Configuration/Options
+        - label: Interceptors
+        - label: Error handling
+        - label: Adapters (xhr, fetch, http)
+        - label: TypeScript definitions
+        - label: Security features
+        - label: Retry mechanism
+        - label: Caching
+        - label: Cancellation

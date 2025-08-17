@@ -1,0 +1,643 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run E2E tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - auth
+        - files
+        - errors
+        - concurrent
+        - frameworks
+        - performance
+        - security
+      browser:
+        description: 'Browser to test'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+        - all
+        - chromium
+        - firefox
+        - webkit
+
+env:
+  NODE_VERSION: '18'
+  PLAYWRIGHT_VERSION: '1.40.0'
+
+jobs:
+  e2e-setup:
+    runs-on: ubuntu-latest
+    outputs:
+      test-matrix: ${{ steps.setup.outputs.test-matrix }}
+      browser-matrix: ${{ steps.setup.outputs.browser-matrix }}
+    steps:
+      - name: Setup test matrix
+        id: setup
+        run: |
+          if [ "${{ github.event.inputs.test_suite }}" = "all" ] || [ -z "${{ github.event.inputs.test_suite }}" ]; then
+            echo 'test-matrix=["auth-flows", "file-operations", "error-handling", "concurrent-requests", "framework-integration", "performance-reliability", "security"]' >> $GITHUB_OUTPUT
+          else
+            case "${{ github.event.inputs.test_suite }}" in
+              "auth") echo 'test-matrix=["auth-flows"]' >> $GITHUB_OUTPUT ;;
+              "files") echo 'test-matrix=["file-operations"]' >> $GITHUB_OUTPUT ;;
+              "errors") echo 'test-matrix=["error-handling"]' >> $GITHUB_OUTPUT ;;
+              "concurrent") echo 'test-matrix=["concurrent-requests"]' >> $GITHUB_OUTPUT ;;
+              "frameworks") echo 'test-matrix=["framework-integration"]' >> $GITHUB_OUTPUT ;;
+              "performance") echo 'test-matrix=["performance-reliability"]' >> $GITHUB_OUTPUT ;;
+              "security") echo 'test-matrix=["security"]' >> $GITHUB_OUTPUT ;;
+              *) echo 'test-matrix=["auth-flows", "file-operations", "error-handling"]' >> $GITHUB_OUTPUT ;;
+            esac
+          fi
+          
+          if [ "${{ github.event.inputs.browser }}" = "all" ] || [ -z "${{ github.event.inputs.browser }}" ]; then
+            echo 'browser-matrix=["chromium", "firefox", "webkit"]' >> $GITHUB_OUTPUT
+          else
+            echo "browser-matrix=[\"${{ github.event.inputs.browser }}\"]" >> $GITHUB_OUTPUT
+          fi
+
+  e2e-test:
+    needs: e2e-setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test-suite: ${{ fromJson(needs.e2e-setup.outputs.test-matrix) }}
+        browser: ${{ fromJson(needs.e2e-setup.outputs.browser-matrix) }}
+        node-version: [18, 20]
+        exclude:
+          # Exclude webkit on Node 20 to reduce CI load
+          - browser: webkit
+            node-version: 20
+          # Exclude performance tests on all browsers except chromium
+          - test-suite: performance-reliability
+            browser: firefox
+          - test-suite: performance-reliability
+            browser: webkit
+
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build FluxHTTP
+        run: npm run build
+
+      - name: Install Playwright
+        run: |
+          npm run test:e2e:install
+          npx playwright install-deps
+
+      - name: Setup test environment
+        run: |
+          # Create test directories
+          mkdir -p test-results/e2e-artifacts
+          mkdir -p test-results/e2e-report
+          mkdir -p tests/e2e/uploads
+          mkdir -p tests/e2e/static
+          
+          # Create test files
+          echo "Test file content for E2E testing" > tests/e2e/static/test-upload.txt
+          head -c 1048576 /dev/zero > tests/e2e/static/large-test-file.txt  # 1MB file
+
+      - name: Start test servers
+        run: |
+          # Start test server in background
+          node tests/e2e/servers/test-server.js &
+          TEST_SERVER_PID=$!
+          echo "TEST_SERVER_PID=$TEST_SERVER_PID" >> $GITHUB_ENV
+          
+          # Start mock API server in background
+          node tests/e2e/servers/mock-api-server.js &
+          MOCK_API_PID=$!
+          echo "MOCK_API_PID=$MOCK_API_PID" >> $GITHUB_ENV
+          
+          # Wait for servers to be ready
+          sleep 5
+          
+          # Verify servers are running
+          curl -f http://localhost:3000/health || exit 1
+          curl -f http://localhost:3001/health || exit 1
+
+      - name: Run E2E tests - ${{ matrix.test-suite }} on ${{ matrix.browser }}
+        run: |
+          npx playwright test tests/e2e/specs/${{ matrix.test-suite }}.spec.ts \
+            --project=${{ matrix.browser }} \
+            --reporter=html,json,junit \
+            --output-dir=test-results/e2e-artifacts \
+            --timeout=60000 \
+            --retries=2
+        env:
+          CI: true
+          PLAYWRIGHT_HTML_REPORT: test-results/e2e-report-${{ matrix.test-suite }}-${{ matrix.browser }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/e2e-results-${{ matrix.test-suite }}-${{ matrix.browser }}.json
+          PLAYWRIGHT_JUNIT_OUTPUT_NAME: test-results/e2e-results-${{ matrix.test-suite }}-${{ matrix.browser }}.xml
+
+      - name: Stop test servers
+        if: always()
+        run: |
+          if [ ! -z "$TEST_SERVER_PID" ]; then
+            kill $TEST_SERVER_PID || true
+          fi
+          if [ ! -z "$MOCK_API_PID" ]; then
+            kill $MOCK_API_PID || true
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-${{ matrix.test-suite }}-${{ matrix.browser }}-node${{ matrix.node-version }}
+          path: |
+            test-results/e2e-report-${{ matrix.test-suite }}-${{ matrix.browser }}
+            test-results/e2e-results-${{ matrix.test-suite }}-${{ matrix.browser }}.json
+            test-results/e2e-results-${{ matrix.test-suite }}-${{ matrix.browser }}.xml
+            test-results/e2e-artifacts
+          retention-days: 30
+
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots-${{ matrix.test-suite }}-${{ matrix.browser }}-node${{ matrix.node-version }}
+          path: test-results/e2e-artifacts/**/*.png
+          retention-days: 30
+
+  e2e-report:
+    needs: e2e-test
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-results
+          pattern: e2e-results-*
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Generate consolidated report
+        run: |
+          mkdir -p consolidated-report
+          
+          # Create report generator script
+          cat > generate-report.js << 'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          
+          function findJsonFiles(dir) {
+            const files = [];
+            if (fs.existsSync(dir)) {
+              const items = fs.readdirSync(dir, { withFileTypes: true });
+              for (const item of items) {
+                const fullPath = path.join(dir, item.name);
+                if (item.isDirectory()) {
+                  files.push(...findJsonFiles(fullPath));
+                } else if (item.name.endsWith('.json')) {
+                  files.push(fullPath);
+                }
+              }
+            }
+            return files;
+          }
+          
+          const jsonFiles = findJsonFiles('downloaded-results');
+          console.log(`Found ${jsonFiles.length} result files`);
+          
+          const consolidatedResults = {
+            summary: {
+              totalTests: 0,
+              passed: 0,
+              failed: 0,
+              skipped: 0,
+              totalDuration: 0
+            },
+            suites: {},
+            browsers: {},
+            timestamp: new Date().toISOString()
+          };
+          
+          for (const file of jsonFiles) {
+            try {
+              const content = fs.readFileSync(file, 'utf8');
+              const result = JSON.parse(content);
+              
+              if (result.stats) {
+                consolidatedResults.summary.totalTests += result.stats.total || 0;
+                consolidatedResults.summary.passed += result.stats.passed || 0;
+                consolidatedResults.summary.failed += result.stats.failed || 0;
+                consolidatedResults.summary.skipped += result.stats.skipped || 0;
+                consolidatedResults.summary.totalDuration += result.stats.duration || 0;
+              }
+              
+              // Extract suite and browser info from filename
+              const filename = path.basename(file);
+              const parts = filename.replace('.json', '').split('-');
+              if (parts.length >= 3) {
+                const suite = parts.slice(2, -1).join('-');
+                const browser = parts[parts.length - 1];
+                
+                if (!consolidatedResults.suites[suite]) {
+                  consolidatedResults.suites[suite] = { passed: 0, failed: 0, total: 0 };
+                }
+                if (!consolidatedResults.browsers[browser]) {
+                  consolidatedResults.browsers[browser] = { passed: 0, failed: 0, total: 0 };
+                }
+                
+                const suiteStats = result.stats || {};
+                consolidatedResults.suites[suite].passed += suiteStats.passed || 0;
+                consolidatedResults.suites[suite].failed += suiteStats.failed || 0;
+                consolidatedResults.suites[suite].total += suiteStats.total || 0;
+                
+                consolidatedResults.browsers[browser].passed += suiteStats.passed || 0;
+                consolidatedResults.browsers[browser].failed += suiteStats.failed || 0;
+                consolidatedResults.browsers[browser].total += suiteStats.total || 0;
+              }
+            } catch (error) {
+              console.error(`Error processing ${file}:`, error.message);
+            }
+          }
+          
+          fs.writeFileSync('consolidated-report/e2e-results.json', JSON.stringify(consolidatedResults, null, 2));
+          
+          // Generate HTML report
+          const html = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>FluxHTTP E2E Test Results</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              .summary { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+              .passed { color: green; }
+              .failed { color: red; }
+              .skipped { color: orange; }
+              table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background-color: #f2f2f2; }
+            </style>
+          </head>
+          <body>
+            <h1>FluxHTTP E2E Test Results</h1>
+            
+            <div class="summary">
+              <h2>Summary</h2>
+              <p><strong>Total Tests:</strong> ${consolidatedResults.summary.totalTests}</p>
+              <p><span class="passed"><strong>Passed:</strong> ${consolidatedResults.summary.passed}</span></p>
+              <p><span class="failed"><strong>Failed:</strong> ${consolidatedResults.summary.failed}</span></p>
+              <p><span class="skipped"><strong>Skipped:</strong> ${consolidatedResults.summary.skipped}</span></p>
+              <p><strong>Duration:</strong> ${Math.round(consolidatedResults.summary.totalDuration / 1000)}s</p>
+              <p><strong>Success Rate:</strong> ${((consolidatedResults.summary.passed / consolidatedResults.summary.totalTests) * 100).toFixed(1)}%</p>
+            </div>
+            
+            <h2>Results by Test Suite</h2>
+            <table>
+              <tr><th>Suite</th><th>Total</th><th>Passed</th><th>Failed</th><th>Success Rate</th></tr>
+              ${Object.entries(consolidatedResults.suites).map(([suite, stats]) => 
+                `<tr>
+                  <td>${suite}</td>
+                  <td>${stats.total}</td>
+                  <td class="passed">${stats.passed}</td>
+                  <td class="failed">${stats.failed}</td>
+                  <td>${((stats.passed / stats.total) * 100).toFixed(1)}%</td>
+                </tr>`
+              ).join('')}
+            </table>
+            
+            <h2>Results by Browser</h2>
+            <table>
+              <tr><th>Browser</th><th>Total</th><th>Passed</th><th>Failed</th><th>Success Rate</th></tr>
+              ${Object.entries(consolidatedResults.browsers).map(([browser, stats]) => 
+                `<tr>
+                  <td>${browser}</td>
+                  <td>${stats.total}</td>
+                  <td class="passed">${stats.passed}</td>
+                  <td class="failed">${stats.failed}</td>
+                  <td>${((stats.passed / stats.total) * 100).toFixed(1)}%</td>
+                </tr>`
+              ).join('')}
+            </table>
+            
+            <p><em>Generated at: ${consolidatedResults.timestamp}</em></p>
+          </body>
+          </html>
+          `;
+          
+          fs.writeFileSync('consolidated-report/index.html', html);
+          
+          console.log('Consolidated report generated');
+          console.log('Summary:', consolidatedResults.summary);
+          EOF
+          
+          node generate-report.js
+
+      - name: Upload consolidated report
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-consolidated-report
+          path: consolidated-report/
+          retention-days: 90
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            if (fs.existsSync('consolidated-report/e2e-results.json')) {
+              const results = JSON.parse(fs.readFileSync('consolidated-report/e2e-results.json', 'utf8'));
+              
+              const body = `## 🧪 E2E Test Results
+              
+              **Summary:**
+              - **Total Tests:** ${results.summary.totalTests}
+              - **✅ Passed:** ${results.summary.passed}
+              - **❌ Failed:** ${results.summary.failed}
+              - **⏭️ Skipped:** ${results.summary.skipped}
+              - **⏱️ Duration:** ${Math.round(results.summary.totalDuration / 1000)}s
+              - **📊 Success Rate:** ${((results.summary.passed / results.summary.totalTests) * 100).toFixed(1)}%
+              
+              **Test Suites:**
+              ${Object.entries(results.suites).map(([suite, stats]) => 
+                `- **${suite}:** ${stats.passed}/${stats.total} passed (${((stats.passed / stats.total) * 100).toFixed(1)}%)`
+              ).join('\n')}
+              
+              **Browsers:**
+              ${Object.entries(results.browsers).map(([browser, stats]) => 
+                `- **${browser}:** ${stats.passed}/${stats.total} passed (${((stats.passed / stats.total) * 100).toFixed(1)}%)`
+              ).join('\n')}
+              
+              [📊 View detailed report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+              `;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
+
+  e2e-performance-analysis:
+    needs: e2e-test
+    runs-on: ubuntu-latest
+    if: contains(github.event.inputs.test_suite, 'performance') || github.event.inputs.test_suite == 'all' || github.event_name != 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download performance test results
+        uses: actions/download-artifact@v4
+        with:
+          path: performance-results
+          pattern: e2e-results-performance-*
+
+      - name: Analyze performance metrics
+        run: |
+          mkdir -p performance-analysis
+          
+          # Create performance analysis script
+          cat > analyze-performance.js << 'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          
+          function findJsonFiles(dir) {
+            const files = [];
+            if (fs.existsSync(dir)) {
+              const items = fs.readdirSync(dir, { withFileTypes: true });
+              for (const item of items) {
+                const fullPath = path.join(dir, item.name);
+                if (item.isDirectory()) {
+                  files.push(...findJsonFiles(fullPath));
+                } else if (item.name.endsWith('.json')) {
+                  files.push(fullPath);
+                }
+              }
+            }
+            return files;
+          }
+          
+          const performanceFiles = findJsonFiles('performance-results');
+          const analysis = {
+            averageTestDuration: 0,
+            slowestTests: [],
+            fastestTests: [],
+            memoryUsage: [],
+            throughputMetrics: [],
+            timestamp: new Date().toISOString()
+          };
+          
+          for (const file of performanceFiles) {
+            try {
+              const content = fs.readFileSync(file, 'utf8');
+              const result = JSON.parse(content);
+              
+              if (result.tests) {
+                result.tests.forEach(test => {
+                  const duration = test.duration || 0;
+                  if (duration > 0) {
+                    analysis.slowestTests.push({
+                      title: test.title,
+                      duration: duration,
+                      file: path.basename(file)
+                    });
+                  }
+                });
+              }
+            } catch (error) {
+              console.error(`Error analyzing ${file}:`, error.message);
+            }
+          }
+          
+          // Sort and limit results
+          analysis.slowestTests.sort((a, b) => b.duration - a.duration);
+          analysis.slowestTests = analysis.slowestTests.slice(0, 10);
+          
+          analysis.fastestTests = analysis.slowestTests.slice().reverse().slice(0, 5);
+          
+          analysis.averageTestDuration = analysis.slowestTests.reduce((sum, test) => sum + test.duration, 0) / analysis.slowestTests.length;
+          
+          fs.writeFileSync('performance-analysis/performance-metrics.json', JSON.stringify(analysis, null, 2));
+          
+          console.log('Performance analysis complete');
+          console.log(`Average test duration: ${analysis.averageTestDuration}ms`);
+          console.log(`Slowest test: ${analysis.slowestTests[0]?.title} (${analysis.slowestTests[0]?.duration}ms)`);
+          EOF
+          
+          node analyze-performance.js
+
+      - name: Upload performance analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-performance-analysis
+          path: performance-analysis/
+          retention-days: 90
+
+  e2e-security-scan:
+    needs: e2e-test
+    runs-on: ubuntu-latest
+    if: contains(github.event.inputs.test_suite, 'security') || github.event.inputs.test_suite == 'all' || github.event_name != 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download security test results
+        uses: actions/download-artifact@v4
+        with:
+          path: security-results
+          pattern: e2e-results-security-*
+
+      - name: Analyze security test results
+        run: |
+          mkdir -p security-analysis
+          
+          # Create security analysis script
+          cat > analyze-security.js << 'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          
+          function findJsonFiles(dir) {
+            const files = [];
+            if (fs.existsSync(dir)) {
+              const items = fs.readdirSync(dir, { withFileTypes: true });
+              for (const item of items) {
+                const fullPath = path.join(dir, item.name);
+                if (item.isDirectory()) {
+                  files.push(...findJsonFiles(fullPath));
+                } else if (item.name.endsWith('.json')) {
+                  files.push(fullPath);
+                }
+              }
+            }
+            return files;
+          }
+          
+          const securityFiles = findJsonFiles('security-results');
+          const analysis = {
+            totalSecurityTests: 0,
+            passedSecurityTests: 0,
+            failedSecurityTests: 0,
+            criticalIssues: [],
+            securityCategories: {
+              'Authentication': { passed: 0, failed: 0 },
+              'Input Validation': { passed: 0, failed: 0 },
+              'CORS': { passed: 0, failed: 0 },
+              'Headers': { passed: 0, failed: 0 },
+              'Rate Limiting': { passed: 0, failed: 0 }
+            },
+            timestamp: new Date().toISOString()
+          };
+          
+          for (const file of securityFiles) {
+            try {
+              const content = fs.readFileSync(file, 'utf8');
+              const result = JSON.parse(content);
+              
+              if (result.stats) {
+                analysis.totalSecurityTests += result.stats.total || 0;
+                analysis.passedSecurityTests += result.stats.passed || 0;
+                analysis.failedSecurityTests += result.stats.failed || 0;
+              }
+              
+              if (result.tests) {
+                result.tests.forEach(test => {
+                  if (test.status === 'failed') {
+                    analysis.criticalIssues.push({
+                      title: test.title,
+                      error: test.error,
+                      file: path.basename(file)
+                    });
+                  }
+                  
+                  // Categorize security tests
+                  const title = test.title.toLowerCase();
+                  Object.keys(analysis.securityCategories).forEach(category => {
+                    if (title.includes(category.toLowerCase())) {
+                      if (test.status === 'passed') {
+                        analysis.securityCategories[category].passed++;
+                      } else {
+                        analysis.securityCategories[category].failed++;
+                      }
+                    }
+                  });
+                });
+              }
+            } catch (error) {
+              console.error(`Error analyzing ${file}:`, error.message);
+            }
+          }
+          
+          analysis.securityScore = (analysis.passedSecurityTests / analysis.totalSecurityTests) * 100;
+          
+          fs.writeFileSync('security-analysis/security-report.json', JSON.stringify(analysis, null, 2));
+          
+          console.log('Security analysis complete');
+          console.log(`Security score: ${analysis.securityScore.toFixed(1)}%`);
+          console.log(`Critical issues: ${analysis.criticalIssues.length}`);
+          EOF
+          
+          node analyze-security.js
+
+      - name: Upload security analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-security-analysis
+          path: security-analysis/
+          retention-days: 90
+
+      - name: Security Gate Check
+        run: |
+          if [ -f security-analysis/security-report.json ]; then
+            SECURITY_SCORE=$(node -p "JSON.parse(require('fs').readFileSync('security-analysis/security-report.json', 'utf8')).securityScore")
+            CRITICAL_ISSUES=$(node -p "JSON.parse(require('fs').readFileSync('security-analysis/security-report.json', 'utf8')).criticalIssues.length")
+            
+            echo "Security Score: $SECURITY_SCORE%"
+            echo "Critical Issues: $CRITICAL_ISSUES"
+            
+            # Fail if security score is below 90% or there are critical issues
+            if (( $(echo "$SECURITY_SCORE < 90" | bc -l) )); then
+              echo "❌ Security score is below 90% threshold"
+              exit 1
+            fi
+            
+            if [ "$CRITICAL_ISSUES" -gt "0" ]; then
+              echo "❌ Critical security issues found"
+              exit 1
+            fi
+            
+            echo "✅ Security gate passed"
+          fi

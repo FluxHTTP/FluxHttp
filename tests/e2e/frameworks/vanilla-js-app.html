@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FluxHTTP Vanilla JS Integration Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .status { margin: 10px 0; }
+        .success { color: green; }
+        .error { color: red; }
+        .loading { color: blue; }
+        button { margin: 5px; padding: 10px 15px; cursor: pointer; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        .file-input { margin: 10px 0; }
+        .progress-bar { 
+            width: 100%; 
+            height: 20px; 
+            background: #f0f0f0; 
+            border-radius: 10px; 
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill { 
+            height: 100%; 
+            background: #4CAF50; 
+            transition: width 0.3s ease;
+        }
+        .test-results { margin-top: 20px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>FluxHTTP Vanilla JavaScript Integration Test</h1>
+        <p>Testing FluxHTTP with pure JavaScript implementation.</p>
+        
+        <div id="loading" class="loading">Initializing FluxHTTP...</div>
+        
+        <div id="main-content" class="hidden">
+            <!-- HTTP Methods Test -->
+            <div class="test-section">
+                <h3>HTTP Methods Test</h3>
+                <div>
+                    <button onclick="testHttpMethod('GET', '/health')">Test GET</button>
+                    <button onclick="testHttpMethod('POST', '/echo', { message: 'Hello from Vanilla JS' })">Test POST</button>
+                    <button onclick="testHttpMethod('PUT', '/echo', { message: 'Updated from Vanilla JS' })">Test PUT</button>
+                    <button onclick="testHttpMethod('DELETE', '/echo')">Test DELETE</button>
+                    <button onclick="testHttpMethod('PATCH', '/echo', { message: 'Patched from Vanilla JS' })">Test PATCH</button>
+                </div>
+                <div id="http-methods-status" class="status"></div>
+                <div id="http-methods-results"></div>
+            </div>
+
+            <!-- Authentication Test -->
+            <div class="test-section">
+                <h3>Authentication Test</h3>
+                <div>
+                    <button onclick="testLogin()">Login</button>
+                    <button onclick="testGetProfile()" id="profile-btn" disabled>Get Profile</button>
+                    <button onclick="testLogout()" id="logout-btn" disabled>Logout</button>
+                    <button onclick="testRefreshToken()" id="refresh-btn" disabled>Refresh Token</button>
+                </div>
+                <div id="auth-status" class="status">Not authenticated</div>
+            </div>
+
+            <!-- File Upload Test -->
+            <div class="test-section">
+                <h3>File Upload Test</h3>
+                <div class="file-input">
+                    <input type="file" id="file-input" onchange="onFileSelected()">
+                    <button onclick="testFileUpload()" id="upload-btn" disabled>Upload File</button>
+                </div>
+                <div class="progress-bar hidden" id="upload-progress-bar">
+                    <div class="progress-fill" id="upload-progress-fill" style="width: 0%"></div>
+                </div>
+                <div id="upload-status" class="status">No file selected</div>
+            </div>
+
+            <!-- Concurrent Requests Test -->
+            <div class="test-section">
+                <h3>Concurrent Requests Test</h3>
+                <div>
+                    <button onclick="testConcurrentRequests()">Test 10 Concurrent Requests</button>
+                    <button onclick="testMixedConcurrentRequests()">Test Mixed Methods Concurrency</button>
+                    <button onclick="testLargeConcurrentBatch()">Test Large Batch (50 requests)</button>
+                </div>
+                <div id="concurrent-status" class="status"></div>
+                <pre id="concurrent-results" class="hidden"></pre>
+            </div>
+
+            <!-- Error Handling Test -->
+            <div class="test-section">
+                <h3>Error Handling Test</h3>
+                <div>
+                    <button onclick="testError(400)">Test 400</button>
+                    <button onclick="testError(401)">Test 401</button>
+                    <button onclick="testError(404)">Test 404</button>
+                    <button onclick="testError(500)">Test 500</button>
+                    <button onclick="testTimeout()">Test Timeout</button>
+                    <button onclick="testNetworkError()">Test Network Error</button>
+                </div>
+                <div id="error-results"></div>
+            </div>
+
+            <!-- Performance Test -->
+            <div class="test-section">
+                <h3>Performance Test</h3>
+                <div>
+                    <button onclick="testPerformance()">Run Performance Test</button>
+                    <button onclick="testMemoryUsage()">Test Memory Usage</button>
+                    <button onclick="testLargePayload()">Test Large Payload</button>
+                </div>
+                <div id="performance-status" class="status"></div>
+                <pre id="performance-results" class="hidden"></pre>
+            </div>
+
+            <!-- Interceptors Test -->
+            <div class="test-section">
+                <h3>Interceptors Test</h3>
+                <div>
+                    <button onclick="setupInterceptors()">Setup Interceptors</button>
+                    <button onclick="testWithInterceptors()">Test Request with Interceptors</button>
+                    <button onclick="clearInterceptors()">Clear Interceptors</button>
+                </div>
+                <div id="interceptors-status" class="status"></div>
+                <div id="interceptors-log"></div>
+            </div>
+
+            <!-- Cancel Request Test -->
+            <div class="test-section">
+                <h3>Request Cancellation Test</h3>
+                <div>
+                    <button onclick="testCancellation()">Test Cancellation</button>
+                    <button onclick="testMultipleCancellation()">Test Multiple Cancellation</button>
+                </div>
+                <div id="cancellation-status" class="status"></div>
+            </div>
+
+            <!-- Test Summary -->
+            <div class="test-results">
+                <h3>Test Summary</h3>
+                <button onclick="runAllTests()">Run All Tests</button>
+                <button onclick="clearAllResults()">Clear Results</button>
+                <div id="test-summary" class="status"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let fluxHttpInstance = null;
+        let authToken = null;
+        let interceptorsSetup = false;
+        let testResults = {};
+
+        // Initialize FluxHTTP
+        function initializeFluxHttp() {
+            if (window.fluxhttp) {
+                fluxHttpInstance = window.fluxhttp.create({
+                    baseURL: 'http://localhost:3000',
+                    timeout: 10000,
+                    headers: {
+                        'X-Client': 'Vanilla-JS-Test'
+                    }
+                });
+
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+                
+                updateStatus('main', 'FluxHTTP initialized successfully');
+                
+                // Store results for test verification
+                window.vanillaTestResults = {
+                    fluxHttpLoaded: true,
+                    timestamp: Date.now(),
+                    testResults: testResults
+                };
+            } else {
+                setTimeout(initializeFluxHttp, 100);
+            }
+        }
+
+        // Utility functions
+        function updateStatus(section, message, isError = false) {
+            const statusElement = document.getElementById(`${section}-status`);
+            if (statusElement) {
+                statusElement.textContent = message;
+                statusElement.className = `status ${isError ? 'error' : 'success'}`;
+            }
+        }
+
+        function logResult(testName, success, data = null, error = null) {
+            testResults[testName] = {
+                success,
+                timestamp: Date.now(),
+                data,
+                error: error?.message || error
+            };
+            
+            // Update global results
+            window.vanillaTestResults.testResults = testResults;
+        }
+
+        // HTTP Methods Tests
+        async function testHttpMethod(method, url, data = null) {
+            const testName = `http-${method.toLowerCase()}`;
+            updateStatus('http-methods', `Testing ${method}...`);
+            
+            try {
+                const config = { method, url };
+                if (data) config.data = data;
+                
+                const response = await fluxHttpInstance.request(config);
+                
+                const resultDiv = document.getElementById('http-methods-results');
+                const resultElement = document.createElement('div');
+                resultElement.className = 'status success';
+                resultElement.textContent = `${method}: Success (${response.status})`;
+                resultDiv.appendChild(resultElement);
+                
+                logResult(testName, true, response.data);
+                updateStatus('http-methods', 'HTTP method tests running...');
+                
+            } catch (error) {
+                const resultDiv = document.getElementById('http-methods-results');
+                const resultElement = document.createElement('div');
+                resultElement.className = 'status error';
+                resultElement.textContent = `${method}: Error - ${error.message}`;
+                resultDiv.appendChild(resultElement);
+                
+                logResult(testName, false, null, error);
+                updateStatus('http-methods', `${method} test failed`, true);
+            }
+        }
+
+        // Authentication Tests
+        async function testLogin() {
+            updateStatus('auth', 'Logging in...');
+            
+            try {
+                const response = await fluxHttpInstance.post('/auth/login', {
+                    username: 'testuser',
+                    password: 'testpass'
+                });
+                
+                authToken = response.data.token;
+                
+                // Enable protected action buttons
+                document.getElementById('profile-btn').disabled = false;
+                document.getElementById('logout-btn').disabled = false;
+                document.getElementById('refresh-btn').disabled = false;
+                
+                updateStatus('auth', `Authenticated as ${response.data.user.username}`);
+                logResult('auth-login', true, response.data);
+                
+            } catch (error) {
+                updateStatus('auth', `Login failed: ${error.message}`, true);
+                logResult('auth-login', false, null, error);
+            }
+        }
+
+        async function testGetProfile() {
+            if (!authToken) {
+                updateStatus('auth', 'No token available', true);
+                return;
+            }
+            
+            try {
+                const response = await fluxHttpInstance.get('/auth/profile', {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+                
+                updateStatus('auth', `Profile: ${response.data.user.username} (${response.data.user.email})`);
+                logResult('auth-profile', true, response.data);
+                
+            } catch (error) {
+                updateStatus('auth', `Profile failed: ${error.message}`, true);
+                logResult('auth-profile', false, null, error);
+            }
+        }
+
+        async function testRefreshToken() {
+            if (!authToken) {
+                updateStatus('auth', 'No token to refresh', true);
+                return;
+            }
+            
+            try {
+                const response = await fluxHttpInstance.post('/auth/refresh', {}, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+                
+                authToken = response.data.token;
+                updateStatus('auth', 'Token refreshed successfully');
+                logResult('auth-refresh', true, response.data);
+                
+            } catch (error) {
+                updateStatus('auth', `Token refresh failed: ${error.message}`, true);
+                logResult('auth-refresh', false, null, error);
+            }
+        }
+
+        async function testLogout() {
+            if (!authToken) return;
+            
+            try {
+                await fluxHttpInstance.post('/auth/logout', {}, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+                
+                authToken = null;
+                
+                // Disable protected action buttons
+                document.getElementById('profile-btn').disabled = true;
+                document.getElementById('logout-btn').disabled = true;
+                document.getElementById('refresh-btn').disabled = true;
+                
+                updateStatus('auth', 'Logged out successfully');
+                logResult('auth-logout', true);
+                
+            } catch (error) {
+                updateStatus('auth', `Logout failed: ${error.message}`, true);
+                logResult('auth-logout', false, null, error);
+            }
+        }
+
+        // File Upload Tests
+        function onFileSelected() {
+            const fileInput = document.getElementById('file-input');
+            const uploadBtn = document.getElementById('upload-btn');
+            
+            if (fileInput.files.length > 0) {
+                uploadBtn.disabled = false;
+                updateStatus('upload', `File selected: ${fileInput.files[0].name}`);
+            } else {
+                uploadBtn.disabled = true;
+                updateStatus('upload', 'No file selected');
+            }
+        }
+
+        async function testFileUpload() {
+            const fileInput = document.getElementById('file-input');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                updateStatus('upload', 'Please select a file', true);
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const progressBar = document.getElementById('upload-progress-bar');
+            const progressFill = document.getElementById('upload-progress-fill');
+            
+            progressBar.classList.remove('hidden');
+            updateStatus('upload', 'Uploading...');
+            
+            try {
+                const response = await fluxHttpInstance.post('/files/upload', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    },
+                    onUploadProgress: (progressEvent) => {
+                        const percentage = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                        progressFill.style.width = `${percentage}%`;
+                    }
+                });
+                
+                updateStatus('upload', `Upload successful: ${response.data.filename}`);
+                logResult('file-upload', true, response.data);
+                
+            } catch (error) {
+                updateStatus('upload', `Upload failed: ${error.message}`, true);
+                logResult('file-upload', false, null, error);
+            } finally {
+                setTimeout(() => {
+                    progressBar.classList.add('hidden');
+                    progressFill.style.width = '0%';
+                }, 2000);
+            }
+        }
+
+        // Concurrent Requests Tests
+        async function testConcurrentRequests() {
+            updateStatus('concurrent', 'Running 10 concurrent requests...');
+            
+            const startTime = Date.now();
+            
+            try {
+                const requests = Array.from({ length: 10 }, (_, i) =>
+                    fluxHttpInstance.get(`/concurrent/${i}`)
+                );
+                
+                const responses = await Promise.all(requests);
+                const endTime = Date.now();
+                
+                const results = {
+                    success: true,
+                    count: responses.length,
+                    duration: endTime - startTime,
+                    uniqueIds: [...new Set(responses.map(r => r.data.id))]
+                };
+                
+                document.getElementById('concurrent-results').textContent = JSON.stringify(results, null, 2);
+                document.getElementById('concurrent-results').classList.remove('hidden');
+                
+                updateStatus('concurrent', `Completed 10 requests in ${results.duration}ms`);
+                logResult('concurrent-basic', true, results);
+                
+            } catch (error) {
+                updateStatus('concurrent', `Concurrent test failed: ${error.message}`, true);
+                logResult('concurrent-basic', false, null, error);
+            }
+        }
+
+        async function testMixedConcurrentRequests() {
+            updateStatus('concurrent', 'Testing mixed HTTP methods concurrency...');
+            
+            try {
+                const requests = [
+                    fluxHttpInstance.get('/echo'),
+                    fluxHttpInstance.post('/echo', { data: 'post' }),
+                    fluxHttpInstance.put('/echo', { data: 'put' }),
+                    fluxHttpInstance.delete('/echo'),
+                    fluxHttpInstance.patch('/echo', { data: 'patch' })
+                ];
+                
+                const responses = await Promise.all(requests);
+                const methods = responses.map(r => r.data.method);
+                
+                updateStatus('concurrent', `Mixed methods completed: ${methods.join(', ')}`);
+                logResult('concurrent-mixed', true, { methods });
+                
+            } catch (error) {
+                updateStatus('concurrent', `Mixed concurrent test failed: ${error.message}`, true);
+                logResult('concurrent-mixed', false, null, error);
+            }
+        }
+
+        async function testLargeConcurrentBatch() {
+            updateStatus('concurrent', 'Running large batch (50 requests)...');
+            
+            const startTime = Date.now();
+            
+            try {
+                const requests = Array.from({ length: 50 }, (_, i) =>
+                    fluxHttpInstance.get(`/concurrent/${i % 10}`) // Reuse some endpoints
+                );
+                
+                const responses = await Promise.all(requests);
+                const endTime = Date.now();
+                
+                const results = {
+                    totalRequests: responses.length,
+                    duration: endTime - startTime,
+                    averageTime: (endTime - startTime) / responses.length,
+                    successCount: responses.length
+                };
+                
+                updateStatus('concurrent', `Completed ${results.totalRequests} requests in ${results.duration}ms (avg: ${results.averageTime.toFixed(2)}ms)`);
+                logResult('concurrent-large', true, results);
+                
+            } catch (error) {
+                updateStatus('concurrent', `Large batch test failed: ${error.message}`, true);
+                logResult('concurrent-large', false, null, error);
+            }
+        }
+
+        // Error Handling Tests
+        async function testError(statusCode) {
+            try {
+                await fluxHttpInstance.get(`/error/${statusCode}`);
+                
+                const resultDiv = document.getElementById('error-results');
+                const resultElement = document.createElement('div');
+                resultElement.className = 'status error';
+                resultElement.textContent = `${statusCode}: Unexpected success`;
+                resultDiv.appendChild(resultElement);
+                
+            } catch (error) {
+                const resultDiv = document.getElementById('error-results');
+                const resultElement = document.createElement('div');
+                resultElement.className = 'status success';
+                resultElement.textContent = `${statusCode}: Caught error (${error.response?.status})`;
+                resultDiv.appendChild(resultElement);
+                
+                logResult(`error-${statusCode}`, true, { statusCode: error.response?.status });
+            }
+        }
+
+        async function testTimeout() {
+            try {
+                await fluxHttpInstance.get('/delay/2000', { timeout: 1000 });
+                
+                const resultDiv = document.getElementById('error-results');
+                const resultElement = document.createElement('div');
+                resultElement.className = 'status error';
+                resultElement.textContent = 'Timeout: Unexpected success';
+                resultDiv.appendChild(resultElement);
+                
+            } catch (error) {
+                const resultDiv = document.getElementById('error-results');
+                const resultElement = document.createElement('div');
+                resultElement.className = 'status success';
+                resultElement.textContent = `Timeout: Caught (${error.message})`;
+                resultDiv.appendChild(resultElement);
+                
+                logResult('error-timeout', true, { errorType: 'timeout' });
+            }
+        }
+
+        async function testNetworkError() {
+            try {
+                await fluxHttpInstance.get('http://invalid-domain.test/api');
+                
+                const resultDiv = document.getElementById('error-results');
+                const resultElement = document.createElement('div');
+                resultElement.className = 'status error';
+                resultElement.textContent = 'Network: Unexpected success';
+                resultDiv.appendChild(resultElement);
+                
+            } catch (error) {
+                const resultDiv = document.getElementById('error-results');
+                const resultElement = document.createElement('div');
+                resultElement.className = 'status success';
+                resultElement.textContent = `Network: Caught (${error.message})`;
+                resultDiv.appendChild(resultElement);
+                
+                logResult('error-network', true, { errorType: 'network' });
+            }
+        }
+
+        // Performance Tests
+        async function testPerformance() {
+            updateStatus('performance', 'Running performance test...');
+            
+            const iterations = 20;
+            const results = [];
+            
+            for (let i = 0; i < iterations; i++) {
+                const start = performance.now();
+                
+                try {
+                    await fluxHttpInstance.get('/health');
+                    const end = performance.now();
+                    results.push(end - start);
+                } catch (error) {
+                    results.push(null);
+                }
+            }
+            
+            const validResults = results.filter(r => r !== null);
+            const avgTime = validResults.reduce((a, b) => a + b, 0) / validResults.length;
+            const minTime = Math.min(...validResults);
+            const maxTime = Math.max(...validResults);
+            
+            const performanceData = {
+                iterations,
+                successCount: validResults.length,
+                averageTime: avgTime.toFixed(2),
+                minTime: minTime.toFixed(2),
+                maxTime: maxTime.toFixed(2)
+            };
+            
+            document.getElementById('performance-results').textContent = JSON.stringify(performanceData, null, 2);
+            document.getElementById('performance-results').classList.remove('hidden');
+            
+            updateStatus('performance', `Performance test completed: avg ${avgTime.toFixed(2)}ms`);
+            logResult('performance-basic', true, performanceData);
+        }
+
+        async function testMemoryUsage() {
+            if (!performance.memory) {
+                updateStatus('performance', 'Memory API not available', true);
+                return;
+            }
+            
+            const memBefore = performance.memory.usedJSHeapSize;
+            
+            // Create memory pressure with large requests
+            const requests = Array.from({ length: 10 }, () =>
+                fluxHttpInstance.get('/data/large?size=1000')
+            );
+            
+            try {
+                await Promise.all(requests);
+                
+                const memAfter = performance.memory.usedJSHeapSize;
+                const memIncrease = memAfter - memBefore;
+                
+                updateStatus('performance', `Memory test: +${(memIncrease / 1024 / 1024).toFixed(2)}MB`);
+                logResult('performance-memory', true, { memoryIncrease: memIncrease });
+                
+            } catch (error) {
+                updateStatus('performance', `Memory test failed: ${error.message}`, true);
+                logResult('performance-memory', false, null, error);
+            }
+        }
+
+        async function testLargePayload() {
+            updateStatus('performance', 'Testing large payload...');
+            
+            const largeData = {
+                data: 'x'.repeat(1024 * 100) // 100KB
+            };
+            
+            try {
+                const start = performance.now();
+                const response = await fluxHttpInstance.post('/data/large', largeData);
+                const end = performance.now();
+                
+                updateStatus('performance', `Large payload: ${(end - start).toFixed(2)}ms`);
+                logResult('performance-large-payload', true, { duration: end - start });
+                
+            } catch (error) {
+                updateStatus('performance', `Large payload failed: ${error.message}`, true);
+                logResult('performance-large-payload', false, null, error);
+            }
+        }
+
+        // Interceptors Tests
+        function setupInterceptors() {
+            if (interceptorsSetup) {
+                updateStatus('interceptors', 'Interceptors already setup');
+                return;
+            }
+            
+            // Request interceptor
+            fluxHttpInstance.interceptors.request.use(
+                (config) => {
+                    config.headers['X-Request-Time'] = Date.now().toString();
+                    logInterceptor('Request interceptor: Added timestamp header');
+                    return config;
+                },
+                (error) => {
+                    logInterceptor('Request interceptor error: ' + error.message);
+                    return Promise.reject(error);
+                }
+            );
+            
+            // Response interceptor
+            fluxHttpInstance.interceptors.response.use(
+                (response) => {
+                    logInterceptor('Response interceptor: Success');
+                    return response;
+                },
+                (error) => {
+                    logInterceptor('Response interceptor: Error - ' + error.message);
+                    return Promise.reject(error);
+                }
+            );
+            
+            interceptorsSetup = true;
+            updateStatus('interceptors', 'Interceptors setup successfully');
+        }
+
+        function logInterceptor(message) {
+            const logDiv = document.getElementById('interceptors-log');
+            const logElement = document.createElement('div');
+            logElement.className = 'status';
+            logElement.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            logDiv.appendChild(logElement);
+        }
+
+        async function testWithInterceptors() {
+            if (!interceptorsSetup) {
+                updateStatus('interceptors', 'Setup interceptors first', true);
+                return;
+            }
+            
+            try {
+                await fluxHttpInstance.get('/health');
+                updateStatus('interceptors', 'Request with interceptors completed');
+                logResult('interceptors-test', true);
+                
+            } catch (error) {
+                updateStatus('interceptors', `Interceptors test failed: ${error.message}`, true);
+                logResult('interceptors-test', false, null, error);
+            }
+        }
+
+        function clearInterceptors() {
+            fluxHttpInstance.interceptors.request.clear();
+            fluxHttpInstance.interceptors.response.clear();
+            interceptorsSetup = false;
+            
+            document.getElementById('interceptors-log').innerHTML = '';
+            updateStatus('interceptors', 'Interceptors cleared');
+        }
+
+        // Request Cancellation Tests
+        async function testCancellation() {
+            updateStatus('cancellation', 'Testing request cancellation...');
+            
+            const controller = new AbortController();
+            
+            try {
+                // Start request with delay
+                const requestPromise = fluxHttpInstance.get('/delay/3000', {
+                    signal: controller.signal
+                });
+                
+                // Cancel after 500ms
+                setTimeout(() => {
+                    controller.abort();
+                }, 500);
+                
+                await requestPromise;
+                updateStatus('cancellation', 'Unexpected success (should have been cancelled)', true);
+                
+            } catch (error) {
+                if (error.name === 'AbortError' || error.message.includes('abort')) {
+                    updateStatus('cancellation', 'Request cancelled successfully');
+                    logResult('cancellation-single', true);
+                } else {
+                    updateStatus('cancellation', `Unexpected error: ${error.message}`, true);
+                    logResult('cancellation-single', false, null, error);
+                }
+            }
+        }
+
+        async function testMultipleCancellation() {
+            updateStatus('cancellation', 'Testing multiple request cancellation...');
+            
+            const controllers = Array.from({ length: 5 }, () => new AbortController());
+            
+            const requests = controllers.map((controller, i) =>
+                fluxHttpInstance.get(`/delay/2000`, {
+                    signal: controller.signal
+                }).catch(error => ({
+                    index: i,
+                    cancelled: error.name === 'AbortError'
+                }))
+            );
+            
+            // Cancel all after 500ms
+            setTimeout(() => {
+                controllers.forEach(controller => controller.abort());
+            }, 500);
+            
+            try {
+                const results = await Promise.all(requests);
+                const cancelledCount = results.filter(r => r.cancelled).length;
+                
+                updateStatus('cancellation', `${cancelledCount}/5 requests cancelled successfully`);
+                logResult('cancellation-multiple', true, { cancelledCount });
+                
+            } catch (error) {
+                updateStatus('cancellation', `Multiple cancellation failed: ${error.message}`, true);
+                logResult('cancellation-multiple', false, null, error);
+            }
+        }
+
+        // Utility functions for batch testing
+        async function runAllTests() {
+            updateStatus('test-summary', 'Running all tests...');
+            
+            const testFunctions = [
+                () => testHttpMethod('GET', '/health'),
+                () => testHttpMethod('POST', '/echo', { test: true }),
+                testLogin,
+                testGetProfile,
+                testConcurrentRequests,
+                () => testError(404),
+                testPerformance
+            ];
+            
+            let passed = 0;
+            let failed = 0;
+            
+            for (const testFn of testFunctions) {
+                try {
+                    await testFn();
+                    passed++;
+                } catch (error) {
+                    failed++;
+                }
+                
+                // Small delay between tests
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            
+            updateStatus('test-summary', `All tests completed: ${passed} passed, ${failed} failed`);
+        }
+
+        function clearAllResults() {
+            testResults = {};
+            window.vanillaTestResults.testResults = {};
+            
+            // Clear all result divs
+            document.getElementById('http-methods-results').innerHTML = '';
+            document.getElementById('error-results').innerHTML = '';
+            document.getElementById('interceptors-log').innerHTML = '';
+            document.getElementById('concurrent-results').classList.add('hidden');
+            document.getElementById('performance-results').classList.add('hidden');
+            
+            updateStatus('test-summary', 'All results cleared');
+        }
+
+        // Global test utilities for external access
+        window.vanillaTestUtils = {
+            triggerHttpTest: (method) => testHttpMethod(method.toUpperCase(), '/health'),
+            triggerLogin: testLogin,
+            triggerConcurrentTest: testConcurrentRequests,
+            getTestResults: () => window.vanillaTestResults,
+            runAllTests,
+            clearAllResults
+        };
+
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            setTimeout(initializeFluxHttp, 100);
+        });
+    </script>
+</body>
+</html>

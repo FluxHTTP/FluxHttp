@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FluxHTTP React Integration Test</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .status { margin: 10px 0; }
+        .success { color: green; }
+        .error { color: red; }
+        .loading { color: blue; }
+        button { margin: 5px; padding: 10px 15px; cursor: pointer; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        .file-input { margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef } = React;
+
+        // Custom hook for FluxHTTP
+        function useFluxHttp() {
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState(null);
+            const instanceRef = useRef(null);
+
+            useEffect(() => {
+                if (window.fluxhttp) {
+                    instanceRef.current = window.fluxhttp.create({
+                        baseURL: 'http://localhost:3000',
+                        timeout: 10000
+                    });
+                }
+            }, []);
+
+            const request = useCallback(async (config) => {
+                if (!instanceRef.current) {
+                    throw new Error('FluxHTTP not initialized');
+                }
+
+                setLoading(true);
+                setError(null);
+
+                try {
+                    const response = await instanceRef.current.request(config);
+                    return response.data;
+                } catch (err) {
+                    setError(err);
+                    throw err;
+                } finally {
+                    setLoading(false);
+                }
+            }, []);
+
+            return { request, loading, error, instance: instanceRef.current };
+        }
+
+        // Test component for basic HTTP methods
+        function HttpMethodsTest() {
+            const { request, loading, error } = useFluxHttp();
+            const [results, setResults] = useState({});
+
+            const testMethod = async (method, url, data = null) => {
+                try {
+                    const result = await request({
+                        method,
+                        url,
+                        data
+                    });
+                    setResults(prev => ({
+                        ...prev,
+                        [method]: { success: true, data: result }
+                    }));
+                } catch (err) {
+                    setResults(prev => ({
+                        ...prev,
+                        [method]: { success: false, error: err.message }
+                    }));
+                }
+            };
+
+            return (
+                <div className="test-section">
+                    <h3>HTTP Methods Test</h3>
+                    <div>
+                        <button onClick={() => testMethod('GET', '/health')}>
+                            Test GET
+                        </button>
+                        <button onClick={() => testMethod('POST', '/echo', { message: 'Hello from React' })}>
+                            Test POST
+                        </button>
+                        <button onClick={() => testMethod('PUT', '/echo', { message: 'Updated from React' })}>
+                            Test PUT
+                        </button>
+                        <button onClick={() => testMethod('DELETE', '/echo')}>
+                            Test DELETE
+                        </button>
+                    </div>
+                    
+                    {loading && <div className="status loading">Loading...</div>}
+                    {error && <div className="status error">Error: {error.message}</div>}
+                    
+                    <div>
+                        {Object.entries(results).map(([method, result]) => (
+                            <div key={method} className={`status ${result.success ? 'success' : 'error'}`}>
+                                {method}: {result.success ? 'Success' : `Error - ${result.error}`}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // Authentication test component
+        function AuthTest() {
+            const { request } = useFluxHttp();
+            const [authStatus, setAuthStatus] = useState('Not authenticated');
+            const [token, setToken] = useState(null);
+
+            const login = async () => {
+                try {
+                    const result = await request({
+                        method: 'POST',
+                        url: '/auth/login',
+                        data: { username: 'testuser', password: 'testpass' }
+                    });
+                    setToken(result.token);
+                    setAuthStatus('Authenticated');
+                } catch (err) {
+                    setAuthStatus(`Login failed: ${err.message}`);
+                }
+            };
+
+            const getProfile = async () => {
+                if (!token) {
+                    setAuthStatus('No token available');
+                    return;
+                }
+
+                try {
+                    const result = await request({
+                        method: 'GET',
+                        url: '/auth/profile',
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    setAuthStatus(`Profile: ${result.user.username}`);
+                } catch (err) {
+                    setAuthStatus(`Profile failed: ${err.message}`);
+                }
+            };
+
+            const logout = async () => {
+                if (!token) return;
+
+                try {
+                    await request({
+                        method: 'POST',
+                        url: '/auth/logout',
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    setToken(null);
+                    setAuthStatus('Logged out');
+                } catch (err) {
+                    setAuthStatus(`Logout failed: ${err.message}`);
+                }
+            };
+
+            return (
+                <div className="test-section">
+                    <h3>Authentication Test</h3>
+                    <div>
+                        <button onClick={login}>Login</button>
+                        <button onClick={getProfile} disabled={!token}>Get Profile</button>
+                        <button onClick={logout} disabled={!token}>Logout</button>
+                    </div>
+                    <div className="status">{authStatus}</div>
+                </div>
+            );
+        }
+
+        // File upload test component
+        function FileUploadTest() {
+            const { request, loading } = useFluxHttp();
+            const [uploadStatus, setUploadStatus] = useState('No file selected');
+            const fileInputRef = useRef(null);
+
+            const uploadFile = async () => {
+                const file = fileInputRef.current?.files[0];
+                if (!file) {
+                    setUploadStatus('Please select a file');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const result = await request({
+                        method: 'POST',
+                        url: '/files/upload',
+                        data: formData,
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        }
+                    });
+                    setUploadStatus(`Upload successful: ${result.filename}`);
+                } catch (err) {
+                    setUploadStatus(`Upload failed: ${err.message}`);
+                }
+            };
+
+            return (
+                <div className="test-section">
+                    <h3>File Upload Test</h3>
+                    <div className="file-input">
+                        <input 
+                            type="file" 
+                            ref={fileInputRef}
+                            onChange={() => setUploadStatus('File selected')}
+                        />
+                        <button onClick={uploadFile} disabled={loading}>
+                            {loading ? 'Uploading...' : 'Upload File'}
+                        </button>
+                    </div>
+                    <div className="status">{uploadStatus}</div>
+                </div>
+            );
+        }
+
+        // Concurrent requests test
+        function ConcurrentTest() {
+            const { request } = useFluxHttp();
+            const [results, setResults] = useState(null);
+
+            const testConcurrent = async () => {
+                const startTime = Date.now();
+                setResults('Running...');
+
+                try {
+                    const requests = Array.from({ length: 10 }, (_, i) =>
+                        request({ method: 'GET', url: `/concurrent/${i}` })
+                    );
+
+                    const responses = await Promise.all(requests);
+                    const endTime = Date.now();
+
+                    setResults({
+                        success: true,
+                        count: responses.length,
+                        duration: endTime - startTime,
+                        uniqueIds: [...new Set(responses.map(r => r.id))]
+                    });
+                } catch (err) {
+                    setResults({
+                        success: false,
+                        error: err.message
+                    });
+                }
+            };
+
+            return (
+                <div className="test-section">
+                    <h3>Concurrent Requests Test</h3>
+                    <button onClick={testConcurrent}>Test 10 Concurrent Requests</button>
+                    <div className="status">
+                        {typeof results === 'string' && results}
+                        {typeof results === 'object' && results && (
+                            <pre>
+                                {JSON.stringify(results, null, 2)}
+                            </pre>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Error handling test
+        function ErrorHandlingTest() {
+            const { request } = useFluxHttp();
+            const [errorResults, setErrorResults] = useState({});
+
+            const testError = async (statusCode) => {
+                try {
+                    await request({ method: 'GET', url: `/error/${statusCode}` });
+                    setErrorResults(prev => ({
+                        ...prev,
+                        [statusCode]: 'Unexpected success'
+                    }));
+                } catch (err) {
+                    setErrorResults(prev => ({
+                        ...prev,
+                        [statusCode]: `Caught: ${err.response?.status || err.message}`
+                    }));
+                }
+            };
+
+            return (
+                <div className="test-section">
+                    <h3>Error Handling Test</h3>
+                    <div>
+                        {[400, 401, 404, 500].map(code => (
+                            <button key={code} onClick={() => testError(code)}>
+                                Test {code}
+                            </button>
+                        ))}
+                    </div>
+                    <div>
+                        {Object.entries(errorResults).map(([code, result]) => (
+                            <div key={code} className="status">
+                                {code}: {result}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // Main App component
+        function App() {
+            const [fluxHttpReady, setFluxHttpReady] = useState(false);
+
+            useEffect(() => {
+                const checkFluxHttp = () => {
+                    if (window.fluxhttp) {
+                        setFluxHttpReady(true);
+                        window.reactTestResults = {
+                            fluxHttpLoaded: true,
+                            timestamp: Date.now()
+                        };
+                    } else {
+                        setTimeout(checkFluxHttp, 100);
+                    }
+                };
+                checkFluxHttp();
+            }, []);
+
+            if (!fluxHttpReady) {
+                return <div className="loading">Loading FluxHTTP...</div>;
+            }
+
+            return (
+                <div className="container">
+                    <h1>FluxHTTP React Integration Test</h1>
+                    <p>Testing FluxHTTP integration with React components and hooks.</p>
+                    
+                    <HttpMethodsTest />
+                    <AuthTest />
+                    <FileUploadTest />
+                    <ConcurrentTest />
+                    <ErrorHandlingTest />
+                </div>
+            );
+        }
+
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('root'));
+
+        // Global test utilities
+        window.reactTestUtils = {
+            triggerHttpTest: (method) => {
+                const button = document.querySelector(`button:contains("Test ${method.toUpperCase()}")`);
+                if (button) button.click();
+            },
+            
+            triggerLogin: () => {
+                const button = document.querySelector('button:contains("Login")');
+                if (button) button.click();
+            },
+            
+            getTestResults: () => {
+                return window.reactTestResults || {};
+            }
+        };
+    </script>
+</body>
+</html>

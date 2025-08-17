@@ -1,0 +1,60 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: docs-site/package-lock.json
+
+    - name: Install dependencies
+      working-directory: docs-site
+      run: npm ci
+
+    - name: Run linting
+      working-directory: docs-site
+      run: npm run lint
+
+    - name: Run type checking
+      working-directory: docs-site
+      run: npm run type-check
+
+    - name: Build
+      working-directory: docs-site
+      run: npm run build
+      env:
+        NODE_ENV: production
+
+    - name: Setup Pages
+      if: github.ref == 'refs/heads/main'
+      uses: actions/configure-pages@v4
+
+    - name: Upload artifact
+      if: github.ref == 'refs/heads/main'
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: docs-site/out
+
+    - name: Deploy to GitHub Pages
+      if: github.ref == 'refs/heads/main'
+      id: deployment
+      uses: actions/deploy-pages@v4

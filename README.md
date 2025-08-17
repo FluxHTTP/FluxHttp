@@ -13,7 +13,7 @@
   
   **@fluxhttp/core** is a modern, lightweight HTTP client for JavaScript/TypeScript with zero dependencies, full TypeScript support, and universal compatibility.
   
-  [Quick Start](#-quick-start) • [API Reference](./docs/API.md) • [Examples](./examples) • [Migration Guide](./docs/migration-from-axios.md)
+  [Quick Start](#-quick-start) • [📖 Interactive Docs](https://fluxhttp.github.io/docs) • [API Reference](./docs/API.md) • [Examples](./examples) • [Migration Guide](./docs/migration-from-axios.md)
 </div>
 
 ---
@@ -400,7 +400,21 @@ fluxhttp.isfluxhttpError(error)               // After
 
 ## 📚 Documentation
 
-Comprehensive guides and references to get you up and running:
+### 🌐 Interactive Documentation Site
+
+**🎆 [Visit the FluxHTTP Documentation Site](https://fluxhttp.github.io/docs)**
+
+Our comprehensive documentation site features:
+- 📚 **Complete guides** - Installation, usage, configuration
+- 🎮 **Interactive playground** - Test FluxHTTP directly in your browser
+- 📑 **Live examples** - Copy-paste code snippets that actually work
+- 🌌 **Framework guides** - React, Vue, Angular, Svelte integration
+- 🔍 **Search functionality** - Find what you need quickly
+- 🎨 **Modern design** - Dark/light mode, mobile-friendly
+
+### 📚 Local Documentation
+
+For offline reference, comprehensive guides are also available in this repository:
 
 ### 🚀 Getting Started
 - [📖 Basic Examples](./examples/basic/) - Simple GET, POST, error handling
@@ -502,7 +516,7 @@ FluxHTTP is [MIT licensed](./LICENSE).
   
   **Built with ❤️ by the FluxHTTP Team**
   
-  [GitHub](https://github.com/fluxhttp/core) • [Documentation](./docs/) • [Examples](./examples/) • [Changelog](./CHANGELOG.md)
+  [GitHub](https://github.com/fluxhttp/core) • [📖 Interactive Docs](https://fluxhttp.github.io/docs) • [Documentation](./docs/) • [Examples](./examples/) • [Changelog](./CHANGELOG.md)
   
   **Star ⭐ this repo if FluxHTTP helps you build better applications!**
   

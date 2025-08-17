@@ -1,0 +1,57 @@
+# Dockerfile for FluxHTTP E2E Test Runner with Playwright
+FROM mcr.microsoft.com/playwright:v1.40.0-focal
+
+# Set working directory
+WORKDIR /app
+
+# Set environment variables
+ENV CI=true
+ENV NODE_ENV=test
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Install additional utilities
+RUN apt-get update && apt-get install -y \
+    curl \
+    jq \
+    dumb-init \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci && npm cache clean --force
+
+# Copy source code and tests
+COPY . .
+
+# Build FluxHTTP
+RUN npm run build
+
+# Verify Playwright installation
+RUN npx playwright --version
+
+# Create test directories
+RUN mkdir -p \
+    test-results/e2e-artifacts \
+    test-results/e2e-report \
+    tests/e2e/uploads \
+    tests/e2e/static
+
+# Create test files
+RUN echo "Test file content for E2E testing" > tests/e2e/static/test-upload.txt && \
+    head -c 1048576 /dev/zero > tests/e2e/static/large-test-file.txt
+
+# Create non-root user
+RUN groupadd -r e2euser && useradd -r -g e2euser e2euser && \
+    chown -R e2euser:e2euser /app
+
+USER e2euser
+
+# Default command
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["npm", "run", "test:e2e"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD npx playwright --version || exit 1

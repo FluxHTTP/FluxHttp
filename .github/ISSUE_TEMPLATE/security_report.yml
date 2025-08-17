@@ -1,0 +1,96 @@
+name: 🔒 Security Report
+description: Report a security vulnerability (for non-critical issues only)
+title: "[Security]: "
+labels: ["security", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **IMPORTANT**: If you've found a critical security vulnerability, please do NOT create a public issue. Instead, email us privately at security@fluxhttp.com with the details.
+        
+        This form is for non-critical security concerns or general security improvement suggestions.
+
+  - type: checkboxes
+    id: severity-check
+    attributes:
+      label: Severity Confirmation
+      description: Please confirm this is NOT a critical security issue
+      options:
+        - label: This is NOT a critical security vulnerability that could be exploited
+          required: true
+        - label: I understand that critical vulnerabilities should be reported privately to security@fluxhttp.com
+          required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Security Issue Type
+      description: What type of security concern is this?
+      options:
+        - Security Enhancement Suggestion
+        - Dependency Security Question
+        - Security Best Practice Recommendation
+        - Documentation Security Improvement
+        - Security Testing Suggestion
+        - General Security Question
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Security Concern Description
+      description: Describe the security concern or suggestion
+      placeholder: Describe the security issue or enhancement...
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Potential Impact
+      description: What could be the potential impact if this concern is not addressed?
+      placeholder: The potential impact could be...
+
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommended Solution
+      description: What would you recommend to address this security concern?
+      placeholder: I recommend...
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Any relevant security guidelines, CVEs, or documentation
+      placeholder: |
+        - OWASP guidance: [link]
+        - Related CVE: [number]
+        - Security documentation: [link]
+
+  - type: checkboxes
+    id: affected-components
+    attributes:
+      label: Affected Components
+      description: Which components might be affected? (check all that apply)
+      options:
+        - label: HTTP request handling
+        - label: Configuration parsing
+        - label: Error handling
+        - label: Interceptors
+        - label: Security headers
+        - label: CSRF protection
+        - label: Input validation
+        - label: Dependencies
+        - label: Build process
+        - label: Documentation
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other relevant information about this security concern
+      placeholder: Additional context...

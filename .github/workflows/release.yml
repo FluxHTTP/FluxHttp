@@ -1,0 +1,336 @@
+name: Release Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-type:
+        description: 'Release type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - beta
+      dry-run:
+        description: 'Dry run (do not publish)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  FORCE_COLOR: 1
+  CI: true
+
+jobs:
+  pre-release-checks:
+    name: Pre-Release Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run full test suite
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run build
+          npm run test:all
+          npm run test:coverage
+
+      - name: Security audit
+        run: npm run security:check
+
+      - name: Bundle size check
+        run: npm run size
+
+      - name: Validate package integrity
+        run: |
+          npm pack --dry-run
+          echo "Package validation passed ✅"
+
+      - name: Calculate next version
+        id: version
+        run: |
+          current_version=$(node -p "require('./package.json').version")
+          echo "Current version: $current_version"
+          
+          if [ "${{ github.event.inputs.release-type }}" = "beta" ]; then
+            # For beta, use npm version to calculate
+            next_version=$(npm version prerelease --preid=beta --no-git-tag-version)
+            # Remove the 'v' prefix that npm version adds
+            next_version=${next_version#v}
+          else
+            # For other types, calculate manually to avoid git commits
+            IFS='.' read -ra VERSION_PARTS <<< "$current_version"
+            major=${VERSION_PARTS[0]}
+            minor=${VERSION_PARTS[1]}
+            patch=${VERSION_PARTS[2]}
+            
+            case "${{ github.event.inputs.release-type }}" in
+              "major")
+                major=$((major + 1))
+                minor=0
+                patch=0
+                ;;
+              "minor")
+                minor=$((minor + 1))
+                patch=0
+                ;;
+              "patch")
+                patch=$((patch + 1))
+                ;;
+            esac
+            
+            next_version="$major.$minor.$patch"
+          fi
+          
+          echo "Next version: $next_version"
+          echo "version=$next_version" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get commits since last tag
+          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$last_tag" ]; then
+            commits=$(git log ${last_tag}..HEAD --oneline --no-merges)
+          else
+            commits=$(git log --oneline --no-merges)
+          fi
+          
+          # Format changelog
+          changelog="## What's Changed\n\n"
+          while IFS= read -r commit; do
+            if [ -n "$commit" ]; then
+              changelog="${changelog}* ${commit}\n"
+            fi
+          done <<< "$commits"
+          
+          # Add contributors
+          contributors=$(git log ${last_tag}..HEAD --format='%an' | sort -u | grep -v 'dependabot\|github-actions' | head -10)
+          if [ -n "$contributors" ]; then
+            changelog="${changelog}\n## Contributors\n\n"
+            while IFS= read -r contributor; do
+              if [ -n "$contributor" ]; then
+                changelog="${changelog}* @${contributor}\n"
+              fi
+            done <<< "$contributors"
+          fi
+          
+          # Save changelog to file for later use
+          echo -e "$changelog" > /tmp/changelog.md
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat /tmp/changelog.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: pre-release-checks
+    if: github.event.inputs.dry-run != 'true'
+    timeout-minutes: 10
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Update version in package.json
+        run: |
+          npm version ${{ needs.pre-release-checks.outputs.version }} --no-git-tag-version
+          git add package.json package-lock.json
+
+      - name: Build for release
+        run: npm run build
+
+      - name: Commit version bump
+        run: |
+          git add dist/
+          git commit -m "chore: release v${{ needs.pre-release-checks.outputs.version }}"
+
+      - name: Create Git tag
+        run: |
+          git tag "v${{ needs.pre-release-checks.outputs.version }}"
+
+      - name: Push changes and tags
+        run: |
+          git push origin main
+          git push origin "v${{ needs.pre-release-checks.outputs.version }}"
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "v${{ needs.pre-release-checks.outputs.version }}"
+          name: "Release v${{ needs.pre-release-checks.outputs.version }}"
+          body: ${{ needs.pre-release-checks.outputs.changelog }}
+          draft: false
+          prerelease: ${{ contains(needs.pre-release-checks.outputs.version, 'beta') }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-npm:
+    name: Publish to NPM
+    runs-on: ubuntu-latest
+    needs: [pre-release-checks, create-release]
+    if: github.event.inputs.dry-run != 'true'
+    timeout-minutes: 10
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: "v${{ needs.pre-release-checks.outputs.version }}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Build package
+        run: npm run build
+
+      - name: Publish to NPM (Beta)
+        if: contains(needs.pre-release-checks.outputs.version, 'beta')
+        run: npm publish --tag beta
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to NPM (Latest)
+        if: "!contains(needs.pre-release-checks.outputs.version, 'beta')"
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify published package
+        run: |
+          # Wait a moment for NPM to propagate
+          sleep 30
+          
+          # Verify the package was published
+          published_version=$(npm view @fluxhttp/core version 2>/dev/null || echo "not-found")
+          expected_version="${{ needs.pre-release-checks.outputs.version }}"
+          
+          if [ "$published_version" = "$expected_version" ]; then
+            echo "✅ Package successfully published: @fluxhttp/core@$published_version"
+          else
+            echo "❌ Package verification failed. Expected: $expected_version, Found: $published_version"
+            exit 1
+          fi
+
+  post-release:
+    name: Post-Release Tasks
+    runs-on: ubuntu-latest
+    needs: [pre-release-checks, create-release, publish-npm]
+    if: always() && github.event.inputs.dry-run != 'true'
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update release documentation
+        run: |
+          # Update any release-related documentation if needed
+          echo "Release v${{ needs.pre-release-checks.outputs.version }} completed successfully"
+
+      - name: Notify success
+        if: needs.publish-npm.result == 'success'
+        run: |
+          echo "## 🎉 Release v${{ needs.pre-release-checks.outputs.version }} Published Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Published Package" >> $GITHUB_STEP_SUMMARY
+          echo "- **NPM**: [@fluxhttp/core@${{ needs.pre-release-checks.outputs.version }}](https://www.npmjs.com/package/@fluxhttp/core)" >> $GITHUB_STEP_SUMMARY
+          echo "- **GitHub**: [Release v${{ needs.pre-release-checks.outputs.version }}](https://github.com/${{ github.repository }}/releases/tag/v${{ needs.pre-release-checks.outputs.version }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "npm install @fluxhttp/core@${{ needs.pre-release-checks.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify failure
+        if: needs.publish-npm.result != 'success'
+        run: |
+          echo "## ❌ Release v${{ needs.pre-release-checks.outputs.version }} Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The release process encountered an error. Please check the logs and retry if necessary." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Rollback Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Remove the Git tag: \`git tag -d v${{ needs.pre-release-checks.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "2. Delete the GitHub release if created" >> $GITHUB_STEP_SUMMARY
+          echo "3. Revert version changes in package.json" >> $GITHUB_STEP_SUMMARY
+
+  dry-run-summary:
+    name: Dry Run Summary
+    runs-on: ubuntu-latest
+    needs: pre-release-checks
+    if: github.event.inputs.dry-run == 'true'
+    timeout-minutes: 5
+
+    steps:
+      - name: Display dry run results
+        run: |
+          echo "## 🔍 Dry Run Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Release Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release Type**: ${{ github.event.inputs.release-type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Next Version**: v${{ needs.pre-release-checks.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pre-release Checks" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ TypeScript compilation" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ ESLint validation" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Test suite execution" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Security audit" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Bundle size validation" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Package integrity check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Proposed Changelog" >> $GITHUB_STEP_SUMMARY
+          echo "${{ needs.pre-release-checks.outputs.changelog }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note**: This was a dry run. No actual release was created."

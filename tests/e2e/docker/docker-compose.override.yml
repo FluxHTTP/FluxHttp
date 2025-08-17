@@ -1,0 +1,80 @@
+# Development override for docker-compose.yml
+# This file is automatically loaded by docker-compose and provides development-specific configurations
+
+version: '3.8'
+
+services:
+  test-server:
+    # Enable development mode with hot reload
+    volumes:
+      - ../../..:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - DEBUG=fluxhttp:*
+    command: ["npm", "run", "dev:server"]
+
+  mock-api-server:
+    volumes:
+      - ../../..:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - DEBUG=fluxhttp:*
+    command: ["npm", "run", "dev:mock-server"]
+
+  e2e-runner:
+    # Mount source code for development
+    volumes:
+      - ../../..:/app
+      - /app/node_modules
+      - test-results:/app/test-results
+    environment:
+      - NODE_ENV=development
+      - DEBUG=fluxhttp:*
+      - PLAYWRIGHT_HTML_REPORT=/app/test-results/e2e-report
+    # Override command for development
+    command: ["npm", "run", "test:e2e:headed"]
+
+  # Development tools
+  dev-tools:
+    image: node:18-alpine
+    container_name: fluxhttp-dev-tools
+    working_dir: /app
+    volumes:
+      - ../../..:/app
+    networks:
+      - fluxhttp-test-network
+    environment:
+      - NODE_ENV=development
+    command: ["tail", "-f", "/dev/null"]  # Keep container running
+    profiles:
+      - dev-tools
+
+  # File watcher for automatic test runs
+  test-watcher:
+    extends: e2e-runner
+    container_name: fluxhttp-test-watcher
+    volumes:
+      - ../../..:/app
+      - /app/node_modules
+      - test-results:/app/test-results
+    command: ["npm", "run", "test:e2e:watch"]
+    profiles:
+      - watch
+
+  # Debug container with additional tools
+  debug-runner:
+    extends: e2e-runner
+    container_name: fluxhttp-debug-runner
+    environment:
+      - NODE_ENV=development
+      - DEBUG=fluxhttp:*,pw:*
+      - PLAYWRIGHT_DEBUG=1
+    volumes:
+      - ../../..:/app
+      - /app/node_modules
+      - test-results:/app/test-results
+    command: ["npm", "run", "test:e2e:debug"]
+    profiles:
+      - debug

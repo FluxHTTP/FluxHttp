@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/fluxhttp/core/tree/main/docs
+    about: Check our documentation for usage guides and API reference
+  - name: 💬 Discussions
+    url: https://github.com/fluxhttp/core/discussions
+    about: Ask questions and discuss ideas with the community
+  - name: 🔒 Security Vulnerabilities
+    url: mailto:security@fluxhttp.com
+    about: Report critical security vulnerabilities privately via email
+  - name: 💻 Stack Overflow
+    url: https://stackoverflow.com/questions/tagged/fluxhttp
+    about: Ask questions on Stack Overflow with the 'fluxhttp' tag

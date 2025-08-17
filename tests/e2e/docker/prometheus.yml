@@ -1,0 +1,97 @@
+# Prometheus configuration for FluxHTTP E2E test monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # FluxHTTP test server metrics
+  - job_name: 'fluxhttp-test-server'
+    static_configs:
+      - targets: ['test-server:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Mock API server metrics
+  - job_name: 'fluxhttp-mock-api'
+    static_configs:
+      - targets: ['mock-api-server:3001']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Node exporter for system metrics (if available)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+
+  # Custom test metrics from E2E runner
+  - job_name: 'e2e-test-metrics'
+    static_configs:
+      - targets: ['e2e-runner:9091']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    honor_labels: true
+
+  # Database metrics (if postgres_exporter is available)
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+
+  # Redis metrics (if redis_exporter is available)
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+
+  # Nginx metrics from test results server
+  - job_name: 'nginx-exporter'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 30s
+
+# Alerting configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Recording rules for commonly used queries
+recording_rules:
+  - name: fluxhttp_test_rules
+    rules:
+      # Request rate over 5 minutes
+      - record: fluxhttp_test:request_rate_5m
+        expr: rate(http_requests_total[5m])
+      
+      # Error rate over 5 minutes
+      - record: fluxhttp_test:error_rate_5m
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])
+      
+      # Average response time over 5 minutes
+      - record: fluxhttp_test:response_time_avg_5m
+        expr: rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m])
+      
+      # Test success rate
+      - record: fluxhttp_test:test_success_rate_5m
+        expr: rate(test_results_total{status="passed"}[5m]) / rate(test_results_total[5m])
+
+# Storage configuration
+storage:
+  tsdb:
+    retention.time: 7d
+    retention.size: 1GB
+    wal-compression: true

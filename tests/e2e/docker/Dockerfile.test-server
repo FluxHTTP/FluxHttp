@@ -1,0 +1,75 @@
+# Multi-stage Dockerfile for FluxHTTP E2E Test Server
+FROM node:18-alpine AS base
+
+# Install dependencies for Playwright
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    curl \
+    dumb-init
+
+# Tell Playwright to use the installed Chromium
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin/chromium-browser
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Development stage
+FROM base AS development
+
+# Install all dependencies including dev dependencies
+RUN npm ci && npm cache clean --force
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN npm run build
+
+# Expose ports for test servers
+EXPOSE 3000 3001
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+
+# Default command to start test servers
+CMD ["npm", "run", "test:e2e:servers"]
+
+# Production test stage
+FROM base AS production
+
+# Copy built application
+COPY --from=development /app/dist ./dist
+COPY --from=development /app/tests ./tests
+COPY --from=development /app/package*.json ./
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S fluxhttp -u 1001
+
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/test-results /app/tests/e2e/uploads /app/tests/e2e/static && \
+    chown -R fluxhttp:nodejs /app
+
+USER fluxhttp
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+EXPOSE 3000 3001
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "tests/e2e/servers/test-server.js"]

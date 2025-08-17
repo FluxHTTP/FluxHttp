@@ -1,0 +1,109 @@
+version: 2
+updates:
+  # Enable version updates for npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "fluxhttp-team"
+    assignees:
+      - "fluxhttp-team"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "automated"
+    # Semantic versioning preferences
+    versioning-strategy: increase
+    # Group related updates
+    groups:
+      typescript-ecosystem:
+        patterns:
+          - "typescript"
+          - "@types/*"
+          - "@typescript-eslint/*"
+        update-types:
+          - "minor"
+          - "patch"
+      build-tools:
+        patterns:
+          - "tsup"
+          - "esbuild"
+          - "rollup"
+          - "webpack"
+          - "vite"
+        update-types:
+          - "minor"
+          - "patch"
+      testing-tools:
+        patterns:
+          - "*test*"
+          - "*spec*"
+          - "c8"
+          - "nyc"
+          - "jest"
+          - "vitest"
+          - "mocha"
+          - "chai"
+        update-types:
+          - "minor"
+          - "patch"
+      linting-tools:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "prettier"
+          - "@eslint/*"
+        update-types:
+          - "minor"
+          - "patch"
+    # Ignore specific packages that might cause breaking changes
+    ignore:
+      # Ignore major version updates for critical dependencies during stable releases
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      # Ignore pre-release versions
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+        # Enable major updates only for patch releases
+    # Auto-merge configuration for low-risk updates
+    # Note: This requires branch protection rules to be properly configured
+    # pull-request-branch-name:
+    #   separator: "/"
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "fluxhttp-team"
+    assignees:
+      - "fluxhttp-team"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "github-actions"
+      - "ci"
+      - "automated"
+    # Group all GitHub Actions updates together
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+          - "major"

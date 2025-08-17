@@ -1,0 +1,412 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: 1
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  dependency-scan:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run npm audit
+        id: npm-audit
+        run: |
+          # Run audit and capture output
+          audit_output=$(npm audit --audit-level=moderate --json 2>/dev/null || true)
+          echo "$audit_output" > audit-results.json
+          
+          # Check for vulnerabilities
+          vulnerabilities=$(echo "$audit_output" | jq -r '.metadata.vulnerabilities.total // 0')
+          high_vulns=$(echo "$audit_output" | jq -r '.metadata.vulnerabilities.high // 0')
+          critical_vulns=$(echo "$audit_output" | jq -r '.metadata.vulnerabilities.critical // 0')
+          
+          echo "total_vulnerabilities=$vulnerabilities" >> $GITHUB_OUTPUT
+          echo "high_vulnerabilities=$high_vulns" >> $GITHUB_OUTPUT
+          echo "critical_vulnerabilities=$critical_vulns" >> $GITHUB_OUTPUT
+          
+          # Generate human-readable report
+          echo "## 🔒 Dependency Security Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical | $critical_vulns |" >> $GITHUB_STEP_SUMMARY
+          echo "| High | $high_vulns |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total | $vulnerabilities |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload audit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-results
+          path: audit-results.json
+          retention-days: 30
+
+      - name: Fail on critical vulnerabilities
+        if: steps.npm-audit.outputs.critical_vulnerabilities != '0'
+        run: |
+          echo "❌ Critical vulnerabilities found: ${{ steps.npm-audit.outputs.critical_vulnerabilities }}"
+          echo "Please review and fix critical security issues before proceeding."
+          exit 1
+
+      - name: Warn on high vulnerabilities
+        if: steps.npm-audit.outputs.high_vulnerabilities != '0' && steps.npm-audit.outputs.critical_vulnerabilities == '0'
+        run: |
+          echo "⚠️  High severity vulnerabilities found: ${{ steps.npm-audit.outputs.high_vulnerabilities }}"
+          echo "Consider addressing these security issues."
+
+  codeql-analysis:
+    name: CodeQL Security Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'javascript' ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended,security-and-quality
+          config: |
+            name: "CodeQL Config"
+            disable-default-queries: false
+            queries:
+              - uses: security-extended
+              - uses: security-and-quality
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Build project
+        run: npm run build
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
+          upload: true
+
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+      - name: Upload Gitleaks results
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: gitleaks-results
+          path: results.sarif
+          retention-days: 30
+
+  license-scan:
+    name: License Compliance Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Install license checker
+        run: npm install -g license-checker
+
+      - name: Check licenses
+        run: |
+          # Generate license report
+          license-checker --json --out licenses.json --excludePrivatePackages
+          
+          # Check for problematic licenses
+          problematic_licenses=("GPL" "AGPL" "LGPL" "MPL" "EPL" "CDDL")
+          issues_found=false
+          
+          echo "## 📄 License Compliance Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          for license in "${problematic_licenses[@]}"; do
+            if grep -qi "$license" licenses.json; then
+              echo "⚠️  Found potentially problematic license: $license" >> $GITHUB_STEP_SUMMARY
+              issues_found=true
+            fi
+          done
+          
+          if [ "$issues_found" = false ]; then
+            echo "✅ No problematic licenses detected" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Show license summary
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### License Summary" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+          jq -r 'to_entries | group_by(.value.licenses) | map({license: .[0].value.licenses, count: length}) | sort_by(-.count)' licenses.json >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: licenses.json
+          retention-days: 90
+
+  supply-chain-scan:
+    name: Supply Chain Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run Snyk security scan
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --json-file-output=snyk-results.json
+
+      - name: Upload Snyk results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: snyk-results
+          path: snyk-results.json
+          retention-days: 30
+
+      - name: Package integrity check
+        run: |
+          echo "## 📦 Package Integrity Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check package.json for suspicious scripts
+          suspicious_scripts=("preinstall" "postinstall" "preuninstall" "postuninstall")
+          
+          for script in "${suspicious_scripts[@]}"; do
+            if jq -e ".scripts.$script" package.json > /dev/null 2>&1; then
+              script_content=$(jq -r ".scripts.$script" package.json)
+              echo "⚠️  Found $script script: \`$script_content\`" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          
+          # Check for unnecessary dependencies
+          echo "### Dependency Analysis" >> $GITHUB_STEP_SUMMARY
+          total_deps=$(jq '.dependencies // {} | length' package.json)
+          total_dev_deps=$(jq '.devDependencies // {} | length' package.json)
+          
+          echo "- Production dependencies: $total_deps" >> $GITHUB_STEP_SUMMARY
+          echo "- Development dependencies: $total_dev_deps" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$total_deps" -gt 0 ]; then
+            echo "⚠️  Project claims zero dependencies but has $total_deps listed" >> $GITHUB_STEP_SUMMARY
+            echo "Verify this is intentional for a zero-dependency library" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  security-scorecard:
+    name: OSSF Security Scorecard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      security-events: write
+      id-token: write
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run OSSF Scorecard
+        uses: ossf/scorecard-action@v2.3.1
+        with:
+          results_file: scorecard-results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: scorecard-results.sarif
+
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, codeql-analysis, secret-scan, license-scan, supply-chain-scan, security-scorecard]
+    if: always()
+    timeout-minutes: 5
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: security-artifacts
+
+      - name: Generate security summary
+        run: |
+          echo "## 🛡️  Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status | Details |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Dependency scan status
+          if [ "${{ needs.dependency-scan.result }}" = "success" ]; then
+            echo "| Dependency Scan | ✅ Pass | No critical vulnerabilities |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Dependency Scan | ❌ Fail | Critical vulnerabilities found |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # CodeQL status
+          if [ "${{ needs.codeql-analysis.result }}" = "success" ]; then
+            echo "| CodeQL Analysis | ✅ Pass | No security issues detected |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| CodeQL Analysis | ❌ Fail | Security issues found |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Secret scan status
+          if [ "${{ needs.secret-scan.result }}" = "success" ]; then
+            echo "| Secret Scanning | ✅ Pass | No secrets detected |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Secret Scanning | ❌ Fail | Potential secrets found |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # License scan status
+          if [ "${{ needs.license-scan.result }}" = "success" ]; then
+            echo "| License Compliance | ✅ Pass | No license issues |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| License Compliance | ⚠️  Warning | License review needed |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Supply chain status
+          if [ "${{ needs.supply-chain-scan.result }}" = "success" ]; then
+            echo "| Supply Chain | ✅ Pass | No supply chain issues |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Supply Chain | ⚠️  Warning | Review recommended |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Security scorecard status
+          if [ "${{ needs.security-scorecard.result }}" = "success" ]; then
+            echo "| OSSF Scorecard | ✅ Pass | Security practices evaluated |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| OSSF Scorecard | ⚠️  Warning | Review scorecard results |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔍 Recommendations" >> $GITHUB_STEP_SUMMARY
+          echo "- Review security artifacts for detailed findings" >> $GITHUB_STEP_SUMMARY
+          echo "- Address any critical or high-severity issues promptly" >> $GITHUB_STEP_SUMMARY
+          echo "- Keep dependencies updated regularly" >> $GITHUB_STEP_SUMMARY
+          echo "- Follow secure coding practices" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create security issue (on failures)
+        if: needs.dependency-scan.result == 'failure' || needs.secret-scan.result == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Security Scan Failed - ${new Date().toISOString().split('T')[0]}`;
+            const body = `
+            ## Security Scan Failure Report
+            
+            **Workflow Run**: ${context.payload.repository.html_url}/actions/runs/${context.runId}
+            **Branch**: ${context.ref}
+            **Commit**: ${context.sha}
+            
+            ### Failed Checks
+            ${needs.dependency-scan.result === 'failure' ? '- ❌ Dependency Scan' : ''}
+            ${needs.secret-scan.result === 'failure' ? '- ❌ Secret Scan' : ''}
+            
+            ### Action Required
+            Please review the security scan results and address any critical issues.
+            
+            ---
+            *This issue was automatically created by the security scanning workflow.*
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['security', 'automated']
+            });

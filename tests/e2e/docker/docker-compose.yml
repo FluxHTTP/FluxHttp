@@ -1,0 +1,289 @@
+version: '3.8'
+
+services:
+  # Test server providing HTTP endpoints for E2E tests
+  test-server:
+    build:
+      context: ../../..
+      dockerfile: tests/e2e/docker/Dockerfile.test-server
+      target: production
+    container_name: fluxhttp-test-server
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=test
+      - PORT=3000
+    volumes:
+      - test-uploads:/app/tests/e2e/uploads
+      - test-static:/app/tests/e2e/static
+    networks:
+      - fluxhttp-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # Mock API server for testing external integrations
+  mock-api-server:
+    build:
+      context: ../../..
+      dockerfile: tests/e2e/docker/Dockerfile.test-server
+      target: production
+    container_name: fluxhttp-mock-api-server
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=test
+      - PORT=3001
+    command: ["node", "tests/e2e/servers/mock-api-server.js"]
+    networks:
+      - fluxhttp-test-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # E2E test runner with Playwright
+  e2e-runner:
+    build:
+      context: ../../..
+      dockerfile: tests/e2e/docker/Dockerfile.e2e-runner
+    container_name: fluxhttp-e2e-runner
+    environment:
+      - CI=true
+      - NODE_ENV=test
+      - BASE_URL=http://test-server:3000
+      - API_URL=http://mock-api-server:3001
+      - PLAYWRIGHT_HTML_REPORT=/app/test-results/e2e-report
+      - PLAYWRIGHT_JSON_OUTPUT_NAME=/app/test-results/e2e-results.json
+    volumes:
+      - test-results:/app/test-results
+      - ./playwright.config.js:/app/playwright.config.js:ro
+    networks:
+      - fluxhttp-test-network
+    depends_on:
+      test-server:
+        condition: service_healthy
+      mock-api-server:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+    profiles:
+      - testing
+
+  # E2E test runner for specific test suites
+  e2e-auth:
+    extends: e2e-runner
+    container_name: fluxhttp-e2e-auth
+    command: ["npx", "playwright", "test", "tests/e2e/specs/auth-flows.spec.ts", "--reporter=html,json"]
+    profiles:
+      - auth-tests
+
+  e2e-files:
+    extends: e2e-runner
+    container_name: fluxhttp-e2e-files
+    command: ["npx", "playwright", "test", "tests/e2e/specs/file-operations.spec.ts", "--reporter=html,json"]
+    volumes:
+      - test-results:/app/test-results
+      - test-uploads:/app/tests/e2e/uploads
+    profiles:
+      - file-tests
+
+  e2e-performance:
+    extends: e2e-runner
+    container_name: fluxhttp-e2e-performance
+    command: ["npx", "playwright", "test", "tests/e2e/specs/performance-reliability.spec.ts", "--reporter=html,json", "--timeout=120000"]
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.5'
+          memory: 2G
+    profiles:
+      - performance-tests
+
+  e2e-security:
+    extends: e2e-runner
+    container_name: fluxhttp-e2e-security
+    command: ["npx", "playwright", "test", "tests/e2e/specs/security.spec.ts", "--reporter=html,json"]
+    profiles:
+      - security-tests
+
+  # Browser-specific test runners
+  e2e-chromium:
+    extends: e2e-runner
+    container_name: fluxhttp-e2e-chromium
+    command: ["npx", "playwright", "test", "--project=chromium", "--reporter=html,json"]
+    profiles:
+      - browser-tests
+
+  e2e-firefox:
+    extends: e2e-runner
+    container_name: fluxhttp-e2e-firefox
+    command: ["npx", "playwright", "test", "--project=firefox", "--reporter=html,json"]
+    profiles:
+      - browser-tests
+
+  e2e-webkit:
+    extends: e2e-runner
+    container_name: fluxhttp-e2e-webkit
+    command: ["npx", "playwright", "test", "--project=webkit", "--reporter=html,json"]
+    profiles:
+      - browser-tests
+
+  # Test result server for viewing reports
+  test-results-server:
+    image: nginx:alpine
+    container_name: fluxhttp-test-results-server
+    ports:
+      - "8080:80"
+    volumes:
+      - test-results:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - fluxhttp-test-network
+    profiles:
+      - reports
+    restart: unless-stopped
+
+  # Database for test data (if needed)
+  test-database:
+    image: postgres:15-alpine
+    container_name: fluxhttp-test-database
+    environment:
+      - POSTGRES_DB=fluxhttp_test
+      - POSTGRES_USER=test_user
+      - POSTGRES_PASSWORD=test_password
+    volumes:
+      - test-db-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - fluxhttp-test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d fluxhttp_test"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    profiles:
+      - database
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # Redis for session/cache testing (if needed)
+  test-redis:
+    image: redis:7-alpine
+    container_name: fluxhttp-test-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - test-redis-data:/data
+    networks:
+      - fluxhttp-test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    profiles:
+      - cache
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # Monitoring and metrics
+  test-monitor:
+    image: prom/prometheus:latest
+    container_name: fluxhttp-test-monitor
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - test-metrics-data:/prometheus
+    networks:
+      - fluxhttp-test-network
+    profiles:
+      - monitoring
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+
+volumes:
+  test-results:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/test-results
+
+  test-uploads:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/tests/e2e/uploads
+
+  test-static:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/tests/e2e/static
+
+  test-db-data:
+    driver: local
+
+  test-redis-data:
+    driver: local
+
+  test-metrics-data:
+    driver: local
+
+networks:
+  fluxhttp-test-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

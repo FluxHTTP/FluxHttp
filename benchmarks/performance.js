@@ -119,7 +119,8 @@ class PerformanceBenchmark {
     const beforeMemory = process.memoryUsage();
     
     // Load the library
-    const fluxhttp = require('../dist/index.js');
+    const fluxhttpModule = require('../dist/index.js');
+    const fluxhttp = fluxhttpModule.default || fluxhttpModule;
     
     // Create multiple instances to see memory impact
     const instances = [];
@@ -150,7 +151,8 @@ class PerformanceBenchmark {
     console.log('\\n🚀 Request Performance (Mock)');
     console.log('=' .repeat(40));
     
-    const fluxhttp = require('../dist/index.js');
+    const fluxhttpModule = require('../dist/index.js');
+    const fluxhttp = fluxhttpModule.default || fluxhttpModule;
     
     // Mock the adapter to avoid real network calls
     const mockTimes = [];

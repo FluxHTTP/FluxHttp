@@ -1,0 +1,84 @@
+name: Semantic Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: semantic-release
+  cancel-in-progress: false
+
+env:
+  FORCE_COLOR: 1
+  CI: true
+
+jobs:
+  semantic-release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Verify repository status
+        run: |
+          git status
+          git log --oneline -10
+
+      - name: Run pre-release validation
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run build
+          npm run test:all
+          npm run security:check
+          npm run size
+
+      - name: Semantic Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm run release:semantic
+
+      - name: Success notification
+        if: success()
+        run: |
+          echo "## 🎉 Semantic Release Completed Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The package has been automatically released based on conventional commits." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- Check the [Releases page](https://github.com/${{ github.repository }}/releases) for the new release" >> $GITHUB_STEP_SUMMARY
+          echo "- View the package on [NPM](https://www.npmjs.com/package/@fluxhttp/core)" >> $GITHUB_STEP_SUMMARY
+          echo "- Monitor for any issues in the first 24 hours" >> $GITHUB_STEP_SUMMARY
+
+      - name: Failure notification
+        if: failure()
+        run: |
+          echo "## ❌ Semantic Release Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The semantic release process encountered an error." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Troubleshooting Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Check the action logs for specific error messages" >> $GITHUB_STEP_SUMMARY
+          echo "2. Verify all commit messages follow conventional commit format" >> $GITHUB_STEP_SUMMARY
+          echo "3. Ensure all pre-release checks pass locally" >> $GITHUB_STEP_SUMMARY
+          echo "4. Check NPM token and GitHub permissions" >> $GITHUB_STEP_SUMMARY

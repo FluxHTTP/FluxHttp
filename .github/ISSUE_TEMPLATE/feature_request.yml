@@ -1,0 +1,162 @@
+name: 🚀 Feature Request
+description: Suggest a new feature or enhancement for FluxHTTP
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a new feature! Please provide as much detail as possible to help us understand your request.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      description: Please confirm the following before submitting a feature request
+      options:
+        - label: I have searched existing issues to ensure this feature hasn't been requested
+          required: true
+        - label: I have read the documentation to confirm this feature doesn't already exist
+          required: true
+        - label: This feature aligns with FluxHTTP's goals of being lightweight and zero-dependency
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Description
+      description: What problem does this feature solve? Is your feature request related to a problem?
+      placeholder: "I'm always frustrated when... / It would be helpful if..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like to see implemented
+      placeholder: "I would like FluxHTTP to support..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions or features you've considered
+      placeholder: "I've considered... / Other libraries handle this by..."
+
+  - type: dropdown
+    id: feature-category
+    attributes:
+      label: Feature Category
+      description: What category does this feature fall into?
+      options:
+        - HTTP Client Core
+        - Request/Response Interceptors
+        - Adapters (Browser/Node.js)
+        - Error Handling
+        - Security Features
+        - Performance/Optimization
+        - TypeScript Support
+        - Developer Experience
+        - Documentation
+        - Testing/Debugging
+        - Configuration
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Describe your specific use case and how this feature would help
+      placeholder: "In my application, I need to... This feature would allow me to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: api-proposal
+    attributes:
+      label: API Design Proposal
+      description: If you have ideas for the API design, please share them here
+      render: javascript
+      placeholder: |
+        // Example API usage
+        const client = fluxhttp.create({
+          // new feature configuration
+        });
+        
+        // or new method
+        client.newFeature({
+          // options
+        });
+
+  - type: textarea
+    id: implementation-details
+    attributes:
+      label: Implementation Considerations
+      description: Any thoughts on how this could be implemented? Consider bundle size, performance, etc.
+      placeholder: |
+        - Should be optional to maintain zero-dependency goal
+        - Consider performance impact
+        - Backward compatibility requirements
+        - Bundle size implications
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Low - Nice to have
+        - Medium - Would improve my workflow
+        - High - Important for my project
+        - Critical - Blocking my use of FluxHTTP
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: compatibility
+    attributes:
+      label: Compatibility Requirements
+      description: What environments should this feature support? (check all that apply)
+      options:
+        - label: Node.js
+        - label: Modern browsers (ES2015+)
+        - label: Legacy browser support
+        - label: React Native
+        - label: Electron
+        - label: Web Workers
+        - label: Service Workers
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: Real-world Examples
+      description: Can you provide examples of other libraries or tools that implement similar features?
+      placeholder: |
+        - Axios has a similar feature: [link]
+        - Fetch API supports this with: [example]
+        - Other implementation references...
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Would you be interested in helping implement this feature?
+      options:
+        - label: I would like to work on implementing this feature
+        - label: I can help with testing/feedback
+        - label: I can help with documentation
+        - label: I need help from maintainers
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or examples that would help explain this feature
+      placeholder: Add any other context about the feature request here

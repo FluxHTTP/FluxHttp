@@ -1,0 +1,772 @@
+name: E2E Nightly Tests
+
+on:
+  schedule:
+    # Run comprehensive E2E tests every night at 1 AM UTC
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      test_environment:
+        description: 'Test environment'
+        required: false
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production-like
+        - stress-test
+      include_performance:
+        description: 'Include performance tests'
+        required: false
+        default: true
+        type: boolean
+      include_security:
+        description: 'Include security tests'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  NODE_VERSION: '18'
+  COMPREHENSIVE_TIMEOUT: '120000'  # 2 minutes per test
+
+jobs:
+  nightly-setup:
+    runs-on: ubuntu-latest
+    outputs:
+      test-config: ${{ steps.config.outputs.test-config }}
+    steps:
+      - name: Configure test parameters
+        id: config
+        run: |
+          case "${{ github.event.inputs.test_environment }}" in
+            "production-like")
+              echo 'test-config={"timeout": 180000, "retries": 3, "workers": 2}' >> $GITHUB_OUTPUT
+              ;;
+            "stress-test")
+              echo 'test-config={"timeout": 300000, "retries": 1, "workers": 1}' >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo 'test-config={"timeout": 120000, "retries": 2, "workers": 4}' >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+  comprehensive-e2e:
+    needs: nightly-setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+        test-category: [
+          'core-functionality',
+          'edge-cases',
+          'integration',
+          'performance',
+          'security',
+          'compatibility'
+        ]
+        include:
+          # Add mobile testing
+          - browser: chromium
+            test-category: 'mobile'
+            device: 'Pixel 5'
+          - browser: webkit
+            test-category: 'mobile'
+            device: 'iPhone 12'
+
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build FluxHTTP
+        run: npm run build
+
+      - name: Install Playwright
+        run: |
+          npm run test:e2e:install
+          npx playwright install-deps
+
+      - name: Setup comprehensive test environment
+        run: |
+          # Create extended test environment
+          mkdir -p test-results/nightly-{artifacts,reports,logs}
+          mkdir -p tests/e2e/{uploads,downloads,temp}
+          
+          # Create various test files
+          echo "Small test file" > tests/e2e/static/small-file.txt
+          head -c 10485760 /dev/zero > tests/e2e/static/large-file-10mb.txt  # 10MB
+          head -c 52428800 /dev/zero > tests/e2e/static/xlarge-file-50mb.txt # 50MB (if needed)
+          
+          # Create test data
+          cat > tests/e2e/static/test-data.json << 'EOF'
+          {
+            "users": [
+              {"id": 1, "name": "Test User 1", "email": "test1@example.com"},
+              {"id": 2, "name": "Test User 2", "email": "test2@example.com"}
+            ],
+            "config": {
+              "timeout": 30000,
+              "retries": 3,
+              "environment": "test"
+            }
+          }
+          EOF
+
+      - name: Start test infrastructure
+        run: |
+          # Start main test server
+          node tests/e2e/servers/test-server.js &
+          TEST_SERVER_PID=$!
+          echo "TEST_SERVER_PID=$TEST_SERVER_PID" >> $GITHUB_ENV
+          
+          # Start mock API server
+          node tests/e2e/servers/mock-api-server.js &
+          MOCK_API_PID=$!
+          echo "MOCK_API_PID=$MOCK_API_PID" >> $GITHUB_ENV
+          
+          # Wait for servers
+          sleep 10
+          
+          # Health checks
+          for i in {1..30}; do
+            if curl -f http://localhost:3000/health && curl -f http://localhost:3001/health; then
+              echo "Servers are ready"
+              break
+            fi
+            echo "Waiting for servers... ($i/30)"
+            sleep 2
+          done
+
+      - name: Run comprehensive tests - ${{ matrix.test-category }}
+        run: |
+          TEST_CONFIG='${{ needs.nightly-setup.outputs.test-config }}'
+          TIMEOUT=$(echo $TEST_CONFIG | jq -r '.timeout')
+          RETRIES=$(echo $TEST_CONFIG | jq -r '.retries')
+          WORKERS=$(echo $TEST_CONFIG | jq -r '.workers')
+          
+          case "${{ matrix.test-category }}" in
+            "core-functionality")
+              SPEC_PATTERN="tests/e2e/specs/{auth-flows,file-operations,error-handling}.spec.ts"
+              ;;
+            "edge-cases")
+              SPEC_PATTERN="tests/e2e/specs/{concurrent-requests,error-handling}.spec.ts"
+              ;;
+            "integration")
+              SPEC_PATTERN="tests/e2e/specs/framework-integration.spec.ts"
+              ;;
+            "performance")
+              SPEC_PATTERN="tests/e2e/specs/performance-reliability.spec.ts"
+              ;;
+            "security")
+              SPEC_PATTERN="tests/e2e/specs/security.spec.ts"
+              ;;
+            "compatibility")
+              SPEC_PATTERN="tests/e2e/specs/{auth-flows,framework-integration}.spec.ts"
+              ;;
+            "mobile")
+              SPEC_PATTERN="tests/e2e/specs/{auth-flows,file-operations}.spec.ts"
+              ;;
+            *)
+              SPEC_PATTERN="tests/e2e/specs/*.spec.ts"
+              ;;
+          esac
+          
+          # Configure device for mobile tests
+          DEVICE_ARG=""
+          if [ "${{ matrix.test-category }}" = "mobile" ] && [ -n "${{ matrix.device }}" ]; then
+            DEVICE_ARG="--config=device=\"${{ matrix.device }}\""
+          fi
+          
+          npx playwright test $SPEC_PATTERN \
+            --project=${{ matrix.browser }} \
+            --workers=$WORKERS \
+            --timeout=$TIMEOUT \
+            --retries=$RETRIES \
+            --reporter=html,json,junit \
+            --output-dir=test-results/nightly-artifacts \
+            $DEVICE_ARG
+        env:
+          CI: true
+          PLAYWRIGHT_HTML_REPORT: test-results/nightly-reports/${{ matrix.test-category }}-${{ matrix.browser }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/nightly-${{ matrix.test-category }}-${{ matrix.browser }}.json
+          PLAYWRIGHT_JUNIT_OUTPUT_NAME: test-results/nightly-${{ matrix.test-category }}-${{ matrix.browser }}.xml
+
+      - name: Collect system metrics
+        if: always()
+        run: |
+          # Collect system information for debugging
+          echo "=== System Information ===" > test-results/nightly-logs/system-info.log
+          uname -a >> test-results/nightly-logs/system-info.log
+          cat /proc/version >> test-results/nightly-logs/system-info.log
+          free -h >> test-results/nightly-logs/system-info.log
+          df -h >> test-results/nightly-logs/system-info.log
+          
+          # Check for any memory or resource issues
+          if command -v dmesg >/dev/null 2>&1; then
+            dmesg | tail -50 > test-results/nightly-logs/dmesg.log
+          fi
+
+      - name: Stop test infrastructure
+        if: always()
+        run: |
+          if [ ! -z "$TEST_SERVER_PID" ]; then
+            kill $TEST_SERVER_PID || true
+          fi
+          if [ ! -z "$MOCK_API_PID" ]; then
+            kill $MOCK_API_PID || true
+          fi
+          
+          # Clean up any remaining processes
+          pkill -f "test-server.js" || true
+          pkill -f "mock-api-server.js" || true
+
+      - name: Upload comprehensive test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-results-${{ matrix.test-category }}-${{ matrix.browser }}
+          path: |
+            test-results/nightly-reports
+            test-results/nightly-*.json
+            test-results/nightly-*.xml
+            test-results/nightly-artifacts
+            test-results/nightly-logs
+          retention-days: 90
+
+  stress-testing:
+    needs: nightly-setup
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_environment == 'stress-test' || github.event_name == 'schedule'
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build FluxHTTP
+        run: npm run build
+
+      - name: Install Playwright
+        run: |
+          npm run test:e2e:install
+          npx playwright install-deps
+
+      - name: Setup stress test environment
+        run: |
+          mkdir -p test-results/stress-{artifacts,reports,logs}
+          
+          # Create large test files for stress testing
+          head -c 104857600 /dev/zero > tests/e2e/static/stress-file-100mb.txt  # 100MB
+          
+          # Increase system limits for stress testing
+          ulimit -n 65536 || true  # Increase file descriptor limit
+
+      - name: Start stress test servers
+        run: |
+          # Start servers with higher limits
+          NODE_OPTIONS="--max-old-space-size=8192" node tests/e2e/servers/test-server.js &
+          TEST_SERVER_PID=$!
+          echo "TEST_SERVER_PID=$TEST_SERVER_PID" >> $GITHUB_ENV
+          
+          NODE_OPTIONS="--max-old-space-size=4096" node tests/e2e/servers/mock-api-server.js &
+          MOCK_API_PID=$!
+          echo "MOCK_API_PID=$MOCK_API_PID" >> $GITHUB_ENV
+          
+          sleep 15
+
+      - name: Run stress tests
+        run: |
+          # Create stress test configuration
+          cat > playwright-stress.config.ts << 'EOF'
+          import { defineConfig } from '@playwright/test';
+          import config from './playwright.config';
+          
+          export default defineConfig({
+            ...config,
+            timeout: 300000,      // 5 minutes per test
+            expect: { timeout: 30000 },
+            retries: 0,           // No retries for stress tests
+            workers: 1,           // Single worker to maximize stress
+            use: {
+              ...config.use,
+              actionTimeout: 60000,
+              navigationTimeout: 60000,
+            },
+          });
+          EOF
+          
+          npx playwright test tests/e2e/specs/performance-reliability.spec.ts \
+            --config=playwright-stress.config.ts \
+            --project=chromium \
+            --reporter=html,json \
+            --output-dir=test-results/stress-artifacts
+        env:
+          CI: true
+          STRESS_TEST_MODE: true
+          PLAYWRIGHT_HTML_REPORT: test-results/stress-reports/stress-test
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/stress-test-results.json
+
+      - name: Monitor resource usage during stress test
+        if: always()
+        run: |
+          # Collect final resource usage
+          echo "=== Final Resource Usage ===" > test-results/stress-logs/final-resources.log
+          ps aux --sort=-%cpu | head -20 >> test-results/stress-logs/final-resources.log
+          free -h >> test-results/stress-logs/final-resources.log
+          df -h >> test-results/stress-logs/final-resources.log
+
+      - name: Stop stress test servers
+        if: always()
+        run: |
+          if [ ! -z "$TEST_SERVER_PID" ]; then
+            kill $TEST_SERVER_PID || true
+          fi
+          if [ ! -z "$MOCK_API_PID" ]; then
+            kill $MOCK_API_PID || true
+          fi
+
+      - name: Upload stress test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-test-results
+          path: |
+            test-results/stress-reports
+            test-results/stress-test-results.json
+            test-results/stress-artifacts
+            test-results/stress-logs
+          retention-days: 90
+
+  cross-platform-testing:
+    needs: nightly-setup
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node-version: [18, 20]
+        exclude:
+          # Reduce matrix size for nightly runs
+          - os: windows-latest
+            node-version: 18
+          - os: macos-latest
+            node-version: 18
+
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build FluxHTTP
+        run: npm run build
+
+      - name: Install Playwright
+        run: |
+          npm run test:e2e:install
+          npx playwright install-deps
+
+      - name: Setup cross-platform test environment
+        shell: bash
+        run: |
+          mkdir -p test-results/cross-platform-{artifacts,reports}
+          
+          # Create test files with cross-platform paths
+          echo "Cross-platform test file" > tests/e2e/static/cross-platform-test.txt
+
+      - name: Start test servers (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          node tests/e2e/servers/test-server.js &
+          TEST_SERVER_PID=$!
+          echo "TEST_SERVER_PID=$TEST_SERVER_PID" >> $GITHUB_ENV
+          
+          node tests/e2e/servers/mock-api-server.js &
+          MOCK_API_PID=$!
+          echo "MOCK_API_PID=$MOCK_API_PID" >> $GITHUB_ENV
+          
+          sleep 10
+
+      - name: Start test servers (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Start-Process -FilePath "node" -ArgumentList "tests/e2e/servers/test-server.js" -PassThru | ForEach-Object { $_.Id } | Out-File -FilePath test-server-pid.txt
+          Start-Process -FilePath "node" -ArgumentList "tests/e2e/servers/mock-api-server.js" -PassThru | ForEach-Object { $_.Id } | Out-File -FilePath mock-server-pid.txt
+          
+          Start-Sleep -Seconds 15
+
+      - name: Run cross-platform tests
+        run: |
+          npx playwright test tests/e2e/specs/auth-flows.spec.ts tests/e2e/specs/file-operations.spec.ts \
+            --project=chromium \
+            --workers=2 \
+            --timeout=90000 \
+            --retries=2 \
+            --reporter=html,json \
+            --output-dir=test-results/cross-platform-artifacts
+        env:
+          CI: true
+          PLAYWRIGHT_HTML_REPORT: test-results/cross-platform-reports/${{ matrix.os }}-node${{ matrix.node-version }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: test-results/cross-platform-${{ matrix.os }}-node${{ matrix.node-version }}.json
+
+      - name: Stop test servers (Unix)
+        if: always() && runner.os != 'Windows'
+        run: |
+          if [ ! -z "$TEST_SERVER_PID" ]; then
+            kill $TEST_SERVER_PID || true
+          fi
+          if [ ! -z "$MOCK_API_PID" ]; then
+            kill $MOCK_API_PID || true
+          fi
+
+      - name: Stop test servers (Windows)
+        if: always() && runner.os == 'Windows'
+        run: |
+          if (Test-Path test-server-pid.txt) {
+            $pid = Get-Content test-server-pid.txt
+            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+          }
+          if (Test-Path mock-server-pid.txt) {
+            $pid = Get-Content mock-server-pid.txt
+            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Upload cross-platform results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-platform-results-${{ matrix.os }}-node${{ matrix.node-version }}
+          path: |
+            test-results/cross-platform-reports
+            test-results/cross-platform-*.json
+            test-results/cross-platform-artifacts
+          retention-days: 90
+
+  nightly-report:
+    needs: [comprehensive-e2e, stress-testing, cross-platform-testing]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all nightly results
+        uses: actions/download-artifact@v4
+        with:
+          path: nightly-downloads
+
+      - name: Generate comprehensive nightly report
+        run: |
+          mkdir -p nightly-final-report
+          
+          # Create comprehensive report generator
+          cat > generate-nightly-report.js << 'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          
+          function findJsonFiles(dir) {
+            const files = [];
+            if (fs.existsSync(dir)) {
+              const items = fs.readdirSync(dir, { withFileTypes: true });
+              for (const item of items) {
+                const fullPath = path.join(dir, item.name);
+                if (item.isDirectory()) {
+                  files.push(...findJsonFiles(fullPath));
+                } else if (item.name.endsWith('.json') && !item.name.includes('package')) {
+                  files.push(fullPath);
+                }
+              }
+            }
+            return files;
+          }
+          
+          const allResults = findJsonFiles('nightly-downloads');
+          console.log(`Found ${allResults.length} result files`);
+          
+          const report = {
+            summary: {
+              totalTests: 0,
+              passed: 0,
+              failed: 0,
+              skipped: 0,
+              duration: 0
+            },
+            categories: {},
+            platforms: {},
+            browsers: {},
+            issues: [],
+            recommendations: [],
+            timestamp: new Date().toISOString(),
+            testEnvironment: process.env.GITHUB_EVENT_NAME === 'workflow_dispatch' ? 
+              '${{ github.event.inputs.test_environment }}' : 'nightly-scheduled'
+          };
+          
+          for (const file of allResults) {
+            try {
+              const content = fs.readFileSync(file, 'utf8');
+              const result = JSON.parse(content);
+              
+              if (result.stats) {
+                report.summary.totalTests += result.stats.total || 0;
+                report.summary.passed += result.stats.passed || 0;
+                report.summary.failed += result.stats.failed || 0;
+                report.summary.skipped += result.stats.skipped || 0;
+                report.summary.duration += result.stats.duration || 0;
+              }
+              
+              // Categorize results
+              const filename = path.basename(file);
+              const parts = filename.replace('.json', '').split('-');
+              
+              if (filename.includes('stress')) {
+                if (!report.categories['stress']) report.categories['stress'] = { passed: 0, failed: 0, total: 0 };
+                report.categories['stress'].passed += result.stats?.passed || 0;
+                report.categories['stress'].failed += result.stats?.failed || 0;
+                report.categories['stress'].total += result.stats?.total || 0;
+              } else if (filename.includes('cross-platform')) {
+                const platform = parts.find(p => ['ubuntu', 'windows', 'macos'].some(os => p.includes(os))) || 'unknown';
+                if (!report.platforms[platform]) report.platforms[platform] = { passed: 0, failed: 0, total: 0 };
+                report.platforms[platform].passed += result.stats?.passed || 0;
+                report.platforms[platform].failed += result.stats?.failed || 0;
+                report.platforms[platform].total += result.stats?.total || 0;
+              } else {
+                // Regular nightly tests
+                const category = parts.slice(1, -1).join('-') || 'general';
+                const browser = parts[parts.length - 1] || 'unknown';
+                
+                if (!report.categories[category]) report.categories[category] = { passed: 0, failed: 0, total: 0 };
+                if (!report.browsers[browser]) report.browsers[browser] = { passed: 0, failed: 0, total: 0 };
+                
+                report.categories[category].passed += result.stats?.passed || 0;
+                report.categories[category].failed += result.stats?.failed || 0;
+                report.categories[category].total += result.stats?.total || 0;
+                
+                report.browsers[browser].passed += result.stats?.passed || 0;
+                report.browsers[browser].failed += result.stats?.failed || 0;
+                report.browsers[browser].total += result.stats?.total || 0;
+              }
+              
+              // Collect critical issues
+              if (result.tests) {
+                result.tests.forEach(test => {
+                  if (test.status === 'failed' && test.title.toLowerCase().includes('security')) {
+                    report.issues.push({
+                      type: 'security',
+                      title: test.title,
+                      file: filename
+                    });
+                  } else if (test.status === 'failed' && test.duration > 60000) {
+                    report.issues.push({
+                      type: 'performance',
+                      title: test.title,
+                      duration: test.duration,
+                      file: filename
+                    });
+                  }
+                });
+              }
+            } catch (error) {
+              console.error(`Error processing ${file}:`, error.message);
+            }
+          }
+          
+          // Generate recommendations
+          const successRate = (report.summary.passed / report.summary.totalTests) * 100;
+          
+          if (successRate < 95) {
+            report.recommendations.push('Test success rate is below 95%. Consider investigating failed tests.');
+          }
+          
+          if (report.issues.filter(i => i.type === 'security').length > 0) {
+            report.recommendations.push('Security test failures detected. Review security implementations.');
+          }
+          
+          if (report.issues.filter(i => i.type === 'performance').length > 5) {
+            report.recommendations.push('Multiple performance issues detected. Consider optimization.');
+          }
+          
+          fs.writeFileSync('nightly-final-report/comprehensive-report.json', JSON.stringify(report, null, 2));
+          
+          // Generate HTML report
+          const html = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>FluxHTTP Nightly E2E Test Report</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+              .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+              .summary { background: #e3f2fd; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
+              .metric { display: inline-block; margin: 10px 20px; }
+              .passed { color: #4caf50; font-weight: bold; }
+              .failed { color: #f44336; font-weight: bold; }
+              .skipped { color: #ff9800; font-weight: bold; }
+              table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+              th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+              th { background-color: #f2f2f2; }
+              .issues { background: #fff3e0; padding: 15px; border-radius: 5px; margin: 10px 0; }
+              .recommendations { background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 10px 0; }
+              .success-rate { font-size: 24px; font-weight: bold; }
+              .category-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+              .category-card { background: #fafafa; padding: 15px; border-radius: 5px; border-left: 4px solid #2196f3; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>🌙 FluxHTTP Nightly E2E Test Report</h1>
+              <p><strong>Environment:</strong> ${report.testEnvironment}</p>
+              <p><strong>Generated:</strong> ${new Date(report.timestamp).toLocaleString()}</p>
+              
+              <div class="summary">
+                <h2>📊 Overall Summary</h2>
+                <div class="metric success-rate ${successRate >= 95 ? 'passed' : 'failed'}">
+                  Success Rate: ${successRate.toFixed(1)}%
+                </div>
+                <div class="metric"><strong>Total Tests:</strong> ${report.summary.totalTests}</div>
+                <div class="metric passed">✅ Passed: ${report.summary.passed}</div>
+                <div class="metric failed">❌ Failed: ${report.summary.failed}</div>
+                <div class="metric skipped">⏭️ Skipped: ${report.summary.skipped}</div>
+                <div class="metric"><strong>Duration:</strong> ${Math.round(report.summary.duration / 1000 / 60)}m</div>
+              </div>
+              
+              <div class="category-grid">
+                <div class="category-card">
+                  <h3>🧪 Test Categories</h3>
+                  <table>
+                    <tr><th>Category</th><th>Passed</th><th>Failed</th><th>Rate</th></tr>
+                    ${Object.entries(report.categories).map(([cat, stats]) => 
+                      `<tr>
+                        <td>${cat}</td>
+                        <td class="passed">${stats.passed}</td>
+                        <td class="failed">${stats.failed}</td>
+                        <td>${((stats.passed / stats.total) * 100).toFixed(1)}%</td>
+                      </tr>`
+                    ).join('')}
+                  </table>
+                </div>
+                
+                <div class="category-card">
+                  <h3>🌐 Browser Results</h3>
+                  <table>
+                    <tr><th>Browser</th><th>Passed</th><th>Failed</th><th>Rate</th></tr>
+                    ${Object.entries(report.browsers).map(([browser, stats]) => 
+                      `<tr>
+                        <td>${browser}</td>
+                        <td class="passed">${stats.passed}</td>
+                        <td class="failed">${stats.failed}</td>
+                        <td>${((stats.passed / stats.total) * 100).toFixed(1)}%</td>
+                      </tr>`
+                    ).join('')}
+                  </table>
+                </div>
+                
+                <div class="category-card">
+                  <h3>💻 Platform Results</h3>
+                  <table>
+                    <tr><th>Platform</th><th>Passed</th><th>Failed</th><th>Rate</th></tr>
+                    ${Object.entries(report.platforms).map(([platform, stats]) => 
+                      `<tr>
+                        <td>${platform}</td>
+                        <td class="passed">${stats.passed}</td>
+                        <td class="failed">${stats.failed}</td>
+                        <td>${((stats.passed / stats.total) * 100).toFixed(1)}%</td>
+                      </tr>`
+                    ).join('')}
+                  </table>
+                </div>
+              </div>
+              
+              ${report.issues.length > 0 ? `
+              <div class="issues">
+                <h3>🚨 Critical Issues</h3>
+                <ul>
+                  ${report.issues.map(issue => 
+                    `<li><strong>${issue.type}:</strong> ${issue.title} ${issue.duration ? `(${issue.duration}ms)` : ''}</li>`
+                  ).join('')}
+                </ul>
+              </div>
+              ` : ''}
+              
+              ${report.recommendations.length > 0 ? `
+              <div class="recommendations">
+                <h3>💡 Recommendations</h3>
+                <ul>
+                  ${report.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                </ul>
+              </div>
+              ` : ''}
+              
+              <p><em>This report was generated automatically by the FluxHTTP nightly E2E test suite.</em></p>
+            </div>
+          </body>
+          </html>
+          `;
+          
+          fs.writeFileSync('nightly-final-report/nightly-report.html', html);
+          
+          console.log('Comprehensive nightly report generated');
+          console.log(`Success rate: ${successRate.toFixed(1)}%`);
+          console.log(`Total issues: ${report.issues.length}`);
+          console.log(`Recommendations: ${report.recommendations.length}`);
+          EOF
+          
+          node generate-nightly-report.js
+
+      - name: Upload final nightly report
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-comprehensive-report
+          path: nightly-final-report/
+          retention-days: 180
+
+      - name: Post nightly report to Slack/Discord (if configured)
+        if: always()
+        run: |
+          if [ -f nightly-final-report/comprehensive-report.json ]; then
+            REPORT=$(cat nightly-final-report/comprehensive-report.json)
+            SUCCESS_RATE=$(echo $REPORT | jq -r '.summary.passed / .summary.totalTests * 100')
+            TOTAL_TESTS=$(echo $REPORT | jq -r '.summary.totalTests')
+            PASSED=$(echo $REPORT | jq -r '.summary.passed')
+            FAILED=$(echo $REPORT | jq -r '.summary.failed')
+            ISSUES=$(echo $REPORT | jq -r '.issues | length')
+            
+            echo "📊 Nightly E2E Test Results:"
+            echo "Success Rate: ${SUCCESS_RATE}%"
+            echo "Tests: $PASSED/$TOTAL_TESTS passed"
+            echo "Issues: $ISSUES critical issues found"
+            
+            # Add webhook calls here if Slack/Discord is configured
+            # Example:
+            # curl -X POST $SLACK_WEBHOOK_URL -H 'Content-type: application/json' --data "{\"text\":\"Nightly E2E Results: ${SUCCESS_RATE}% success rate\"}"
+          fi
