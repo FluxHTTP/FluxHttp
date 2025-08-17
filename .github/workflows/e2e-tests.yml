@@ -93,7 +93,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -194,10 +194,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download all test results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: downloaded-results
           pattern: e2e-results-*
@@ -417,10 +417,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download performance test results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: performance-results
           pattern: e2e-results-performance-*
@@ -513,10 +513,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download security test results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: security-results
           pattern: e2e-results-security-*
