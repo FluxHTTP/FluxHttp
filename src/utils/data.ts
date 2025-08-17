@@ -1,5 +1,5 @@
 import type { RequestBody } from '../types';
-import { Environment, Polyfills } from './environment';
+import { Environment, Polyfills } from './environment-minimal';
 
 // COMPATIBILITY: Safe type checking with environment detection
 export function isFormData(value: unknown): value is FormData {
@@ -46,7 +46,7 @@ export function isAnyStream(value: unknown): boolean {
   return isStream(value) || isNodeStream(value);
 }
 
-// SECURITY: Safe object prototype checking
+// SECURITY: Safe object prototype checking with pollution prevention
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object') {
     return false;
@@ -61,7 +61,66 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
   }
 
   // Ensure the constructor is Object (not a custom constructor)
-  return value.constructor === Object;
+  if (value.constructor !== Object) {
+    return false;
+  }
+
+  // SECURITY: Check for prototype pollution attempts
+  if (hasPrototypePollutionKeys(value as Record<string, unknown>)) {
+    return false;
+  }
+
+  return true;
+}
+
+// SECURITY: Detect prototype pollution keys
+function hasPrototypePollutionKeys(obj: Record<string, unknown>): boolean {
+  const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+  
+  for (const key of Object.keys(obj)) {
+    if (dangerousKeys.includes(key)) {
+      return true;
+    }
+    
+    // Check for encoded variants
+    if (key.includes('proto') || key.includes('constructor')) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// SECURITY: Safe string encoding to prevent XSS
+function sanitizeString(value: string): string {
+  return value
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;')
+    .replace(/\\/g, '&#x5C;')
+    .replace(/&/g, '&amp;');
+}
+
+// SECURITY: Detect NoSQL injection patterns
+function hasNoSQLInjection(obj: Record<string, unknown>): boolean {
+  const noSQLOperators = ['$ne', '$gt', '$gte', '$lt', '$lte', '$in', '$nin', '$regex', '$where', '$exists'];
+  
+  for (const key of Object.keys(obj)) {
+    if (noSQLOperators.includes(key)) {
+      return true;
+    }
+    
+    // Check nested objects
+    if (typeof obj[key] === 'object' && obj[key] !== null) {
+      if (hasNoSQLInjection(obj[key] as Record<string, unknown>)) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
 }
 
 // COMPATIBILITY: Safe JSON stringification
@@ -90,13 +149,17 @@ function safeStringify(data: unknown): string {
   }
 }
 
-// COMPATIBILITY: Enhanced request data transformation
+// SECURITY: Enhanced request data transformation with security validation
 export function transformRequestData(data: RequestBody): RequestBody {
   if (data === null || data === undefined) {
     return data;
   }
 
   if (typeof data === 'string') {
+    // SECURITY: Validate string for suspicious patterns
+    if (containsMaliciousPatterns(data)) {
+      throw new Error('Malicious patterns detected in request data');
+    }
     return data;
   }
 
@@ -115,13 +178,39 @@ export function transformRequestData(data: RequestBody): RequestBody {
     return data as RequestBody;
   }
 
-  // Handle plain objects and arrays
-  if (isPlainObject(data) || Array.isArray(data)) {
+  // Handle plain objects and arrays with security validation
+  if (isPlainObject(data)) {
+    // SECURITY: Check for NoSQL injection
+    if (hasNoSQLInjection(data)) {
+      throw new Error('NoSQL injection pattern detected in request data');
+    }
+    return safeStringify(data);
+  }
+
+  if (Array.isArray(data)) {
     return safeStringify(data);
   }
 
   // Fallback to string conversion
   return String(data);
+}
+
+// SECURITY: Detect malicious patterns in strings
+function containsMaliciousPatterns(value: string): boolean {
+  const maliciousPatterns = [
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, // Script tags
+    /javascript:/i,                                        // JavaScript URLs
+    /vbscript:/i,                                         // VBScript URLs
+    /on\w+\s*=/i,                                         // Event handlers
+    /expression\s*\(/i,                                   // CSS expressions
+    /import\s+/i,                                         // ES6 imports
+    /@import/i,                                           // CSS imports
+    /\x00/,                                               // Null bytes
+    /\.\.\//,                                             // Path traversal
+    /\.\.\\/                                              // Windows path traversal
+  ];
+
+  return maliciousPatterns.some(pattern => pattern.test(value));
 }
 
 // COMPATIBILITY: Enhanced response data transformation
@@ -174,7 +263,7 @@ export function getDataSize(data: unknown): number {
     let size = 0;
     try {
       // Use traditional for...of with Array.from for compatibility
-      const entries = Array.from((data as any).entries());
+      const entries = Array.from((data as any).entries()) as [string, unknown][];
       for (const [key, value] of entries) {
         size += Polyfills.getByteLength(key, 'utf8');
         if (typeof value === 'string') {

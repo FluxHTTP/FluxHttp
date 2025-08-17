@@ -1,6 +1,11 @@
 import type { QueryParams } from '../types';
 
 export function buildURL(url: string, params?: QueryParams): string {
+  // SECURITY: Validate URL for dangerous protocols
+  if (!isSecureURL(url)) {
+    throw new Error(`Dangerous URL protocol detected: ${url}`);
+  }
+
   if (!params || Object.keys(params).length === 0) {
     return url;
   }
@@ -109,6 +114,97 @@ export function isAbsoluteURL(url?: string): boolean {
   return /^([a-z][a-z\d+\-.]*:)(\/\/.*|[^/].*)/i.test(url) || /^\/\/[^/]/i.test(url);
 }
 
+// SECURITY: URL validation functions to prevent XSS and SSRF attacks
+export function isSecureURL(url?: string): boolean {
+  if (!url) return false;
+
+  // Dangerous protocol detection
+  const dangerousProtocols = [
+    'javascript:',
+    'data:',
+    'vbscript:',
+    'file:',
+    'ftp:',
+    'about:',
+    'chrome:',
+    'chrome-extension:',
+    'resource:'
+  ];
+
+  const lowerUrl = url.toLowerCase().trim();
+  
+  for (const protocol of dangerousProtocols) {
+    if (lowerUrl.startsWith(protocol)) {
+      return false;
+    }
+  }
+
+  // Check for SSRF-prone URLs
+  if (lowerUrl.startsWith('http://') || lowerUrl.startsWith('https://')) {
+    try {
+      const urlObj = new URL(url);
+      
+      // Block localhost and private IP ranges
+      const hostname = urlObj.hostname.toLowerCase();
+      
+      // Block localhost variants
+      if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+        return false;
+      }
+      
+      // Block private IP ranges
+      if (isPrivateIP(hostname)) {
+        return false;
+      }
+      
+      // Block cloud metadata services
+      if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal') {
+        return false;
+      }
+      
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Allow relative URLs (no protocol)
+  return !lowerUrl.includes(':');
+}
+
+// SECURITY: Check if IP address is in private range
+function isPrivateIP(hostname: string): boolean {
+  // Simple regex patterns for private IP ranges
+  const privateIPPatterns = [
+    /^10\./,                    // 10.0.0.0/8
+    /^172\.(1[6-9]|2[0-9]|3[01])\./, // 172.16.0.0/12
+    /^192\.168\./,              // 192.168.0.0/16
+    /^fc00:/,                   // IPv6 private
+    /^fe80:/,                   // IPv6 link-local
+  ];
+
+  return privateIPPatterns.some(pattern => pattern.test(hostname));
+}
+
+// SECURITY: Path traversal prevention
+export function sanitizePath(path: string): string {
+  // Remove path traversal sequences
+  return path
+    .replace(/\.\.\//g, '')    // Remove ../
+    .replace(/\.\.\\/g, '')    // Remove ..\
+    .replace(/\0/g, '')        // Remove null bytes
+    .replace(/%2e%2e%2f/gi, '') // Remove encoded ../
+    .replace(/%2e%2e%5c/gi, '') // Remove encoded ..\
+    .replace(/\.{2,}/g, '.');   // Remove multiple dots
+}
+
 export function buildFullPath(baseURL?: string, relativeURL?: string): string {
-  return combineURLs(baseURL, relativeURL);
+  const combined = combineURLs(baseURL, relativeURL);
+  
+  // SECURITY: Validate the final URL
+  if (!isSecureURL(combined)) {
+    throw new Error(`Insecure URL detected: ${combined}`);
+  }
+  
+  return combined;
 }

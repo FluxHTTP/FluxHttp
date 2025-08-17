@@ -94,6 +94,44 @@ function isValidRequestBody(data: unknown): data is XMLHttpRequestBodyInit {
   );
 }
 
+// SECURITY: Validate HTTP header names (RFC 7230)
+function isValidHeaderName(name: string): boolean {
+  if (!name || typeof name !== 'string') {
+    return false;
+  }
+
+  // RFC 7230 token characters
+  const tokenRegex = /^[!#$%&'*+\-.0-9A-Z^_`a-z|~]+$/;
+  return tokenRegex.test(name);
+}
+
+// SECURITY: Validate HTTP header values (RFC 7230)
+function isValidHeaderValue(value: string): boolean {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  // Check for control characters that could cause header injection
+  const controlChars = /[\x00-\x1F\x7F]/;
+  if (controlChars.test(value)) {
+    return false;
+  }
+
+  // Check for CRLF sequences that could cause response splitting
+  if (value.includes('\r') || value.includes('\n')) {
+    return false;
+  }
+
+  // Check for suspicious patterns
+  const suspiciousPatterns = [
+    /HTTP\/\d\.\d/,        // HTTP response line
+    /:\s*[\r\n]/,          // Header field ending
+    /\r\n\r\n/,            // End of headers
+  ];
+
+  return !suspiciousPatterns.some(pattern => pattern.test(value));
+}
+
 export function xhrAdapter<T = unknown>(
   config: fluxhttpRequestConfig
 ): Promise<fluxhttpResponse<T>> {
@@ -130,10 +168,20 @@ export function xhrAdapter<T = unknown>(
       xhr.responseType = responseType;
     }
 
-    // Set headers safely
+    // Set headers safely with validation
     Object.entries(headers).forEach(([key, value]) => {
       if (value !== undefined) {
+        // SECURITY: Validate header name and value
+        if (!isValidHeaderName(key)) {
+          throw new Error(`Invalid header name: ${key}`);
+        }
+        
         const headerValue = Array.isArray(value) ? value.join(', ') : String(value);
+        
+        if (!isValidHeaderValue(headerValue)) {
+          throw new Error(`Invalid header value for ${key}: ${headerValue}`);
+        }
+        
         xhr.setRequestHeader(key, headerValue);
       }
     });

@@ -80,7 +80,7 @@ export class CSRFManager {
   /**
    * Generate a new CSRF token
    */
-  generateCSRFToken(): string {
+  async generateCSRFToken(): Promise<string> {
     const tokenLength = this.config.tokenLength;
     const randomBytes = SecurityCrypto.generateSecureBytes(tokenLength);
     const token = btoa(String.fromCharCode.apply(null, Array.from(randomBytes)))
@@ -88,25 +88,25 @@ export class CSRFManager {
       .replace(/\//g, '_')
       .replace(/=/g, '');
 
-    this.setCSRFToken(token);
+    await this.setCSRFToken(token);
     return token;
   }
 
   /**
    * Set CSRF token (encrypted storage)
    */
-  setCSRFToken(token: string): void {
-    this.encryptedCSRFToken = SecurityCrypto.encryptToken(token, this.encryptionKey);
+  async setCSRFToken(token: string): Promise<void> {
+    this.encryptedCSRFToken = await SecurityCrypto.encryptToken(token, this.encryptionKey);
   }
 
   /**
    * Get current CSRF token (decrypted)
    */
-  getCSRFToken(): string | null {
+  async getCSRFToken(): Promise<string | null> {
     if (!this.encryptedCSRFToken) {
       return null;
     }
-    return SecurityCrypto.decryptToken(this.encryptedCSRFToken, this.encryptionKey);
+    return await SecurityCrypto.decryptToken(this.encryptedCSRFToken, this.encryptionKey);
   }
 
   /**
