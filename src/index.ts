@@ -36,40 +36,20 @@ const fluxhttp = createfluxhttpInstance(defaults);
 
 export default fluxhttp;
 
-export * from './types';
+// Core exports only - essential types and functionality
+export type {
+  fluxhttpRequestConfig,
+  fluxhttpResponse,
+  fluxhttpError as fluxhttpErrorType,
+  fluxhttpInstance,
+  HttpMethod,
+  Headers,
+  RequestBody,
+  QueryParams,
+} from './types';
+
 export { fluxhttpError } from './errors';
-export { CancelToken, CancelTokenSource, type Cancel, type Canceler } from './core/canceltoken';
-export {
-  SecurityManager,
-  defaultSecurity,
-  createSecurityConfig,
-  type SecurityConfig,
-} from './core/security';
-export {
-  securityRequestInterceptor,
-  securityResponseInterceptor,
-  createSecurityRequestInterceptor,
-  createSecurityResponseInterceptor,
-} from './interceptors/security';
-export {
-  CacheManager,
-  defaultCacheManager,
-  createCacheConfig,
-  MemoryCacheStorage,
-  LocalStorageCacheStorage,
-  SessionStorageCacheStorage,
-  CacheApiStorage,
-  type CacheStorage,
-  type CacheEntry,
-} from './core/cache';
-export {
-  cacheRequestInterceptor,
-  cacheResponseInterceptor,
-  cacheInvalidationInterceptor,
-  createCacheRequestInterceptor,
-  createCacheResponseInterceptor,
-  createCacheInvalidationInterceptor,
-} from './interceptors/cache';
+export { CancelToken, CancelTokenSource, type Cancel, type Canceler } from './core/canceltoken-minimal';
 
 /**
  * Create a new fluxhttp instance with custom configuration
@@ -91,18 +71,6 @@ export const create = fluxhttp.create.bind(fluxhttp);
  * @function isCancel
  * @param {unknown} value - Value to check
  * @returns {boolean} True if the value is a cancellation error
- * @example
- * ```typescript
- * try {
- *   const response = await fluxhttp.get('/api/data', {
- *     cancelToken: source.token
- *   });
- * } catch (error) {
- *   if (isCancel(error)) {
- *     console.log('Request was cancelled');
- *   }
- * }
- * ```
  */
 export const isCancel = fluxhttp.isCancel.bind(fluxhttp);
 
@@ -111,13 +79,6 @@ export const isCancel = fluxhttp.isCancel.bind(fluxhttp);
  * @function all
  * @param {Array<Promise>} promises - Array of promises to resolve
  * @returns {Promise<Array>} Promise that resolves when all input promises resolve
- * @example
- * ```typescript
- * const [users, posts] = await all([
- *   fluxhttp.get('/api/users'),
- *   fluxhttp.get('/api/posts')
- * ]);
- * ```
  */
 export const all = fluxhttp.all.bind(fluxhttp);
 
@@ -126,11 +87,6 @@ export const all = fluxhttp.all.bind(fluxhttp);
  * @function spread
  * @param {Function} callback - Function to call with spread arguments
  * @returns {Function} Function that accepts an array and spreads it as arguments
- * @example
- * ```typescript
- * const sumAll = spread((a, b, c) => a + b + c);
- * sumAll([1, 2, 3]); // Returns 6
- * ```
  */
 export const spread = fluxhttp.spread.bind(fluxhttp);
 
@@ -139,15 +95,5 @@ export const spread = fluxhttp.spread.bind(fluxhttp);
  * @function isfluxhttpError
  * @param {unknown} error - Error to check
  * @returns {boolean} True if the error is a fluxhttpError
- * @example
- * ```typescript
- * try {
- *   await fluxhttp.get('/api/data');
- * } catch (error) {
- *   if (isfluxhttpError(error)) {
- *     console.log('HTTP Error:', error.response?.status);
- *   }
- * }
- * ```
  */
 export const isfluxhttpError = fluxhttp.isfluxhttpError.bind(fluxhttp);

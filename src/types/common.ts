@@ -1,5 +1,4 @@
-import type { CancelToken } from '../core/canceltoken';
-import type { SecurityConfig } from '../core/security';
+import type { CancelToken } from '../core/canceltoken-minimal';
 
 /**
  * Supported HTTP methods
@@ -104,7 +103,9 @@ export interface fluxhttpRequestConfig {
   /** Cache configuration */
   cache?: CacheConfig;
   /** Security configuration */
-  security?: SecurityConfig;
+  security?: unknown; // Optional security config - use SecurityConfig from @fluxhttp/core/security
+  /** Request deduplication configuration */
+  deduplication?: DeduplicationConfig;
   /** Request data transformers */
   transformRequest?: Array<(data: unknown, headers?: Headers) => unknown>;
   /** Response data transformers */
@@ -143,6 +144,23 @@ export interface CacheConfig {
   storage?: 'memory' | 'localStorage' | 'sessionStorage' | CacheStorage;
   /** Headers to exclude from cache */
   excludeHeaders?: string[];
+}
+
+/**
+ * Request deduplication configuration
+ * @interface DeduplicationConfig
+ */
+export interface DeduplicationConfig {
+  /** Whether deduplication is enabled */
+  enabled?: boolean;
+  /** Maximum time to keep pending requests in cache (ms) */
+  maxAge?: number;
+  /** Headers to include in signature (default: none) */
+  includeHeaders?: string[];
+  /** Custom key generator function */
+  keyGenerator?: (config: fluxhttpRequestConfig) => string;
+  /** Function to determine if requests should be deduplicated */
+  shouldDeduplicate?: (config: fluxhttpRequestConfig) => boolean;
 }
 
 /**
@@ -203,11 +221,16 @@ export interface InterceptorManager<T> {
   ): number;
   eject(id: number): void;
   clear(): void;
+  dispose?(): void;
+  getStats?(): any;
+  size?: number;
 }
 
 export interface InterceptorOptions {
   synchronous?: boolean;
   runWhen?: (config: fluxhttpRequestConfig) => boolean;
+  /** Whether this interceptor should run only once and then be automatically removed */
+  runOnce?: boolean;
 }
 
 export interface fluxhttpInstance {
@@ -240,6 +263,10 @@ export interface fluxhttpInstance {
   ): Promise<fluxhttpResponse<T>>;
 
   getUri(config?: fluxhttpRequestConfig): string;
+  create(config?: fluxhttpRequestConfig): fluxhttpInstance;
+  dispose(): void;
+  isDisposed(): boolean;
+  getMemoryStats(): any;
 }
 
 export interface fluxhttpStatic extends fluxhttpInstance {

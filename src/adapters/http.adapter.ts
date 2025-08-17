@@ -6,6 +6,7 @@ import type { fluxhttpRequestConfig, fluxhttpResponse, FluxProgressEvent } from 
 import { createError, createTimeoutError, createNetworkError, createCancelError } from '../errors';
 import { buildURL } from '../utils/url';
 import { transformRequestData, isStream } from '../utils/data';
+import { defaultPoolManager } from './agents/pool';
 
 // Type-safe JSON parser
 function parseJSON(text: string): unknown {
@@ -97,6 +98,9 @@ export function httpAdapter<T = unknown>(
     const isHttps = parsedUrl.protocol === 'https:';
     const transport = isHttps ? https : http;
 
+    // Get appropriate agent based on protocol
+    const agent = isHttps ? defaultPoolManager.getHttpsAgent() : defaultPoolManager.getHttpAgent();
+
     const options: http.RequestOptions = {
       protocol: parsedUrl.protocol,
       hostname: parsedUrl.hostname,
@@ -105,6 +109,7 @@ export function httpAdapter<T = unknown>(
       method: method.toUpperCase(),
       headers: normalizeHeaders(headers),
       timeout,
+      agent, // Use pooled agent
     };
 
     if (auth) {

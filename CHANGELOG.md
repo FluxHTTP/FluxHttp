@@ -1,65 +1,63 @@
 # Changelog
 
-All notable changes to fluxhttp will be documented in this file.
+All notable changes to @fluxhttp/core will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2025-01-19
+## [Unreleased]
+
+### Known Issues
+- Project is in alpha stage and not production-ready
+- Many features are under development
+- Test coverage needs improvement
+- Documentation is being updated for accuracy
+
+## [0.1.0-alpha] - 2025-08-17
 
 ### Added
-- **Security Features**: Built-in SecurityManager with CSRF protection, rate limiting, and content validation
-- **Retry System**: Automatic retry with exponential backoff and configurable retry conditions
-- **Cancel Token**: Request cancellation support with CancelToken API
-- **Environment Detection**: Smart environment detection utilities for better adapter selection
-- **Security Interceptors**: Pre-configured security interceptors for common attack prevention
-- **Performance Tests**: Comprehensive performance benchmarking suite
-- **Integration Tests**: Real-world scenario testing including cross-platform compatibility
-- **Memory Leak Detection**: Automated memory leak testing for long-running applications
+- Basic HTTP client implementation with GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS methods
+- Request/response interceptor system
+- Platform-specific adapters (XHR, Node.js HTTP, Fetch)
+- Basic error handling with fluxhttpError class
+- TypeScript definitions
+- Request cancellation support via AbortController
+- Basic timeout functionality
+- JSON request/response transformation
+
+### In Development ⚠️
+- **Security Features**: SecurityManager with CSRF protection, rate limiting, and content validation
+- **Retry System**: Automatic retry with exponential backoff
+- **Progress Tracking**: Upload/download progress events
+- **Response Caching**: Intelligent cache management
+- **Performance Optimizations**: Connection pooling and request deduplication
 
 ### Changed
-- Renamed all Axios references to fluxhttp throughout the codebase
-- Improved file naming conventions (lowercase for core files)
-- Enhanced error messages and debugging information
-- Optimized bundle size configuration with stricter limits
+- Updated project documentation to reflect alpha status
+- Corrected false claims about test coverage and feature completeness
+- Updated all import examples to use '@fluxhttp/core'
+- Added appropriate disclaimers for unimplemented features
 
 ### Fixed
-- File naming inconsistencies (now using lowercase)
-- TypeScript import paths for better compatibility
-- Build configuration for universal platform support
+- Documentation accuracy regarding project status
+- Package name consistency throughout documentation
+- Removed misleading badges and external service references
 
-### Technical Improvements
-- Bundle size: ~12KB ESM / ~16KB CJS (optimized from 0.1.0)
-- Test coverage: Targeting 100% for all critical paths
-- Zero runtime dependencies maintained
-- Enhanced TypeScript strict mode compliance
+### Technical Status
+- Bundle target: ~12KB ESM / ~16KB CJS
+- Zero runtime dependencies
+- TypeScript support with strict mode
+- Cross-platform compatibility (Node.js 16+, modern browsers)
 
-## [0.1.0] - 2025-01-17
+### Alpha Limitations
+- Limited test coverage (under development)
+- Many advanced features not yet implemented
+- Documentation being updated for accuracy
+- Not recommended for production use
 
-### Added
-- New `fluxhttp` class as the main HTTP client
-- New `fluxhttpError` class for error handling
-- New TypeScript interfaces: `fluxhttpRequestConfig`, `fluxhttpResponse`, `fluxhttpInstance`
-
-### Maintained
-- ✅ All existing functionality preserved
-- ✅ All 298 unit tests passing
-- ✅ Zero breaking changes
-- ✅ Same API surface and behavior
-
-### Technical Details
-- Bundle size: ~12 KB (ESM), ~16 KB (CJS)
-- Zero dependencies
-- Full TypeScript support
-- Works in Node.js 16+, modern browsers, and edge environments
-- 298 comprehensive unit tests with 85% coverage
-
-### Initial Development
-- Implemented core HTTP client functionality
-- Added request/response interceptors
-- Created platform-specific adapters (XHR, Node.js HTTP, Fetch)
-- Implemented comprehensive error handling
-- Added TypeScript definitions
-- Created 298 unit tests with 85% coverage
-- Built multi-format outputs (ESM, CJS)
-- Created extensive documentation and examples
+### Development Focus
+- Core HTTP functionality
+- Basic interceptor system
+- Cross-platform adapter selection
+- TypeScript integration
+- Build system optimization

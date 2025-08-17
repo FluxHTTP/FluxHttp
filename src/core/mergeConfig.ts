@@ -51,6 +51,7 @@ function isConfigKey(key: string): key is keyof fluxhttpRequestConfig {
     'retry',
     'cache',
     'security',
+    'deduplication',
     'transformRequest',
     'transformResponse',
   ];
@@ -127,6 +128,7 @@ export function mergeConfig(
     retry: 'merge',
     cache: 'merge',
     security: 'merge',
+    deduplication: 'merge',
     headers: 'merge',
     transformRequest: 'replace',
     transformResponse: 'replace',
@@ -182,6 +184,17 @@ export function mergeConfig(
             merged.security = safeObjectCopy(config1Value, value2);
           } else {
             merged.security = value2 as fluxhttpRequestConfig['security'];
+          }
+        }
+      } else if (key === 'deduplication') {
+        // SECURITY: Safe merging for deduplication config
+        const config1Value = safeConfig1.deduplication;
+        if (isRecord(value2)) {
+          if (isRecord(config1Value)) {
+            // Use the safe copy helper function
+            merged.deduplication = safeObjectCopy(config1Value, value2);
+          } else {
+            merged.deduplication = value2 as fluxhttpRequestConfig['deduplication'];
           }
         }
       }

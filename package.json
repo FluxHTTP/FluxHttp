@@ -1,6 +1,6 @@
 {
   "name": "@fluxhttp/core",
-  "version": "1.0.0",
+  "version": "0.1.0-alpha",
   "description": "A modern, lightweight HTTP client for JavaScript/TypeScript with zero dependencies, full TypeScript support, and universal compatibility",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -8,15 +8,22 @@
   "type": "commonjs",
   "typesVersions": {
     "*": {
-      "*": ["dist/*", "dist/index.d.ts"]
+      "*": [
+        "dist/*",
+        "dist/index.d.ts"
+      ]
     }
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./full": {
+      "import": "./dist/full.mjs",
+      "require": "./dist/full.js",
+      "default": "./dist/full.js"
     },
     "./package.json": "./package.json"
   },
@@ -26,17 +33,16 @@
   ],
   "scripts": {
     "prebuild": "npm run clean",
-    "clean": "rm -rf dist coverage .nyc_output",
+    "clean": "rm -rf dist coverage .nyc_output tests-build",
     "build:check": "npm run typecheck && npm run lint",
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "node --test tests/basic.test.js",
-    "test:unit": "node --test tests/basic.test.js",
-    "test:integration": "node --test tests/basic.test.js",
-    "test:all": "node --test tests/basic.test.js",
-    "test:coverage": "c8 --reporter=text --reporter=html --reporter=lcov node --test tests/basic.test.js",
-    "test:watch": "node --test --watch tests/basic.test.js",
-    "pretest": "npm run build",
+    "test": "npm run build && node scripts/run-basic-tests.js",
+    "test:unit": "npm run build && node scripts/test-runner.js unit",
+    "test:integration": "npm run build && node scripts/test-runner.js integration",
+    "test:all": "npm run build && node scripts/test-runner.js all",
+    "test:coverage": "npm run build && node scripts/test-runner.js basic --coverage",
+    "test:watch": "node scripts/test-runner.js basic --watch",
     "lint": "eslint src tests --ext .ts,.tsx,.js",
     "lint:fix": "eslint src tests --ext .ts,.tsx,.js --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.{ts,js}\"",

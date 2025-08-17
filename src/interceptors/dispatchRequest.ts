@@ -1,6 +1,5 @@
 import type { fluxhttpRequestConfig, fluxhttpResponse } from '../types';
 import type { InterceptorManager } from './InterceptorManager';
-import { executeWithRetry } from '../core/retry';
 import { fluxhttpError } from '../errors';
 
 // Type guards for interceptor chain values
@@ -13,6 +12,17 @@ function isResponse<T>(value: unknown): value is fluxhttpResponse<T> {
 }
 
 export async function dispatchRequest<T = unknown>(
+  config: fluxhttpRequestConfig,
+  requestInterceptors: InterceptorManager<fluxhttpRequestConfig>,
+  responseInterceptors: InterceptorManager<fluxhttpResponse>,
+  adapter: (config: fluxhttpRequestConfig) => Promise<fluxhttpResponse<T>>
+): Promise<fluxhttpResponse<T>> {
+  // Direct execution without deduplication (can be added via interceptors if needed)
+  return executeRequest(config, requestInterceptors, responseInterceptors, adapter);
+}
+
+// Internal function that handles the actual request execution
+async function executeRequest<T = unknown>(
   config: fluxhttpRequestConfig,
   requestInterceptors: InterceptorManager<fluxhttpRequestConfig>,
   responseInterceptors: InterceptorManager<fluxhttpResponse>,
@@ -68,7 +78,7 @@ export async function dispatchRequest<T = unknown>(
       if (!isRequestConfig(configValue)) {
         throw new fluxhttpError('Invalid config passed to adapter');
       }
-      return executeWithRetry(() => adapter(configValue), configValue);
+      return adapter(configValue);
     };
 
     const chain: Array<((value: unknown) => unknown) | undefined> = [
@@ -124,9 +134,9 @@ export async function dispatchRequest<T = unknown>(
     }
   }
 
-  // Execute request with retry
+  // Execute request
   try {
-    promise = executeWithRetry(() => adapter(modifiedConfig), modifiedConfig);
+    promise = adapter(modifiedConfig);
   } catch (error) {
     return Promise.reject(error);
   }
@@ -157,4 +167,21 @@ export async function dispatchRequest<T = unknown>(
   }
 
   return promise;
+}
+
+/**
+ * Dispatch a request without deduplication
+ * @param {fluxhttpRequestConfig} config - Request configuration
+ * @param {InterceptorManager} requestInterceptors - Request interceptors
+ * @param {InterceptorManager} responseInterceptors - Response interceptors
+ * @param {Function} adapter - Adapter function
+ * @returns {Promise<fluxhttpResponse>} Response promise
+ */
+export async function dispatchRequestWithoutDeduplication<T = unknown>(
+  config: fluxhttpRequestConfig,
+  requestInterceptors: InterceptorManager<fluxhttpRequestConfig>,
+  responseInterceptors: InterceptorManager<fluxhttpResponse>,
+  adapter: (config: fluxhttpRequestConfig) => Promise<fluxhttpResponse<T>>
+): Promise<fluxhttpResponse<T>> {
+  return executeRequest(config, requestInterceptors, responseInterceptors, adapter);
 }

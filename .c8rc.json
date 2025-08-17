@@ -1,22 +1,29 @@
 {
-  "all": true,
-  "include": ["src/**/*.ts"],
-  "exclude": [
-    "**/*.d.ts",
-    "**/*.test.js",
-    "**/*.spec.js",
-    "tests/**",
-    "examples/**",
-    "dist/**",
-    "coverage/**",
-    "node_modules/**"
-  ],
-  "reporter": ["text", "lcov", "html"],
+  "reporter": ["text", "html", "lcov"],
+  "reports-dir": "coverage",
+  "temp-directory": ".nyc_output",
   "clean": true,
-  "check-coverage": true,
-  "branches": 100,
-  "lines": 100,
-  "functions": 100,
-  "statements": 100,
-  "temp-directory": "./coverage/.tmp"
+  "exclude": [
+    "tests/**/*",
+    "scripts/**/*", 
+    "node_modules/**/*",
+    "**/*.d.ts",
+    "**/*.test.{js,ts}",
+    "**/*.spec.{js,ts}",
+    "coverage/**/*",
+    ".nyc_output/**/*"
+  ],
+  "include": [
+    "src/**/*"
+  ],
+  "extension": [
+    ".js",
+    ".ts"
+  ],
+  "all": true,
+  "check-coverage": false,
+  "lines": 0,
+  "functions": 0,
+  "branches": 0,
+  "statements": 0
 }

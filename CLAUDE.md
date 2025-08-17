@@ -14,21 +14,21 @@ npm run build:check   # Run typecheck and lint before building
 
 ### Testing Commands
 ```bash
-npm test              # Run unit tests only
-npm run test:unit     # Run unit tests
+npm test              # Run basic tests (tests/basic.test.js)
+npm run test:unit     # Run unit tests  
 npm run test:integration  # Run integration tests
 npm run test:all      # Run all tests
-npm run test:coverage # Run tests with coverage report (requires 100% coverage)
+npm run test:coverage # Run tests with coverage report using c8
 npm run test:watch    # Run tests in watch mode
 
 # Run a single test file
-node --test tests/unit/core/fluxhttp.test.js
+node --test tests/basic.test.js
 
 # Run tests matching a pattern
 node --test tests/**/*.test.js --test-name-pattern "should create instance"
 
 # Run with coverage locally
-npx c8 node --test tests/**/*.test.js
+npx c8 node --test tests/basic.test.js
 ```
 
 ### Code Quality Commands
@@ -113,6 +113,12 @@ fluxhttp is designed as a zero-dependency HTTP client with three main architectu
 - Security headers injection
 - Request/response validation
 
+### Caching System (`src/core/cache.ts`)
+- CacheManager with multiple storage backends
+- Memory, LocalStorage, SessionStorage, and CacheAPI support
+- Request/response caching interceptors
+- Cache invalidation strategies
+
 ### Retry System (`src/core/retry.ts`)
 - Exponential backoff strategy
 - Configurable retry conditions
@@ -120,17 +126,18 @@ fluxhttp is designed as a zero-dependency HTTP client with three main architectu
 - Respects Retry-After headers
 
 ### Build Configuration
-- **tsup**: Modern bundler for TypeScript
+- **tsup**: Modern bundler for TypeScript (tsup.config.ts)
 - Dual build output: CommonJS (.js) and ESM (.mjs)
 - TypeScript declarations generated for both formats
 - Source maps included for debugging
 - Minified output with tree-shaking
+- Platform: neutral, with Node.js built-ins externalized
 
 ### Testing Strategy
 - **Node.js Test Runner**: Built-in test runner (no external dependencies)
-- **c8**: Coverage reporting with 100% requirement
-- Separate unit and integration test suites
-- 100% code coverage enforced for all code
+- **c8**: Coverage reporting tool
+- Test files: TypeScript tests in tests/unit and tests/integration
+- Basic test entry: tests/basic.test.js
 - Mock adapters for testing without network calls
 - Cross-platform testing for browser/Node.js compatibility
 
@@ -147,16 +154,19 @@ fluxhttp is designed as a zero-dependency HTTP client with three main architectu
 │   ├── core/         # Core classes and utilities
 │   ├── errors/       # Error handling
 │   ├── interceptors/ # Request/response pipeline
+│   ├── security/     # Security modules
 │   ├── types/        # TypeScript definitions
 │   └── utils/        # Shared utilities
 └── tests/
     ├── unit/         # Unit tests
-    └── integration/  # Integration tests
+    ├── integration/  # Integration tests
+    └── basic.test.js # Basic test entry point
 ```
 
 ### Critical Files
 - `src/index.ts`: Main entry point and exports
-- `src/core/createfluxhttpInstance.ts`: Factory function for creating instances
+- `src/core/createfluxhttpinstance.ts`: Factory function for creating instances (lowercase naming)
+- `src/core/fluxhttp.ts`: Main fluxhttp class implementation
 - `src/interceptors/dispatchRequest.ts`: Core request dispatching logic
 - `src/adapters/index.ts`: Adapter selection logic
 
@@ -169,15 +179,9 @@ fluxhttp is designed as a zero-dependency HTTP client with three main architectu
 6. Run `npm run lint:fix` to fix style issues
 7. Build with `npm run build` before committing
 
-### Common Issues
-- **Test failures**: Check vitest.config.ts for test environment setup
-- **Build warnings**: Usually about Node.js built-ins in universal package
-- **Type errors**: Ensure all imports include proper type extensions
-- **Bundle size**: Use `npm run size` to check against limits
-
 ### Important Notes
-- **File naming**: Core files use lowercase (e.g., `fluxhttp.ts`, `createfluxhttpinstance.ts`)
-- **Test setup**: The test setup file at `tests/setup/global.ts` may need to be created
-- **Examples**: Run examples with `npm run examples:*` scripts for testing functionality
-- **Security**: Built-in security features can be configured via SecurityManager
+- **File naming**: Core files use lowercase (e.g., `fluxhttp.ts`, `createfluxhttpinstance.ts`, `canceltoken.ts`)
+- **Zero dependencies**: This package has NO production dependencies
 - **Bundle limits**: 16KB for CommonJS, 12KB for ESM (enforced by size-limit)
+- **Security**: Built-in security features via SecurityManager
+- **Type exports**: All types are exported from src/types/index.ts

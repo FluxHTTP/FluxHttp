@@ -1,20 +1,27 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: {
+    'index': 'src/index.ts',
+    'full': 'src/index.ts'
+  },
   format: ['cjs', 'esm'],
-  dts: true,
-  splitting: true,
-  sourcemap: true,
+  dts: false,
+  splitting: false,  // Disable splitting to reduce bundle count
+  sourcemap: false,  // Disable source maps to reduce size
   clean: true,
   minify: true,
-  treeshake: true,
-  shims: true,
+  treeshake: {
+    preset: 'safest',  // Most aggressive tree-shaking
+    moduleSideEffects: false,
+  },
+  shims: false,  // Disable shims to reduce size
   target: 'es2020',
-  external: ['http', 'https', 'zlib', 'stream', 'url', 'path', 'util', 'buffer', 'events'],
+  external: ['http', 'https', 'zlib', 'stream', 'url', 'path', 'util', 'buffer', 'events', 'crypto'],
   platform: 'neutral',
+  bundle: true,  // Bundle all dependencies
   esbuildOptions(options) {
-    options.keepNames = true;
+    options.keepNames = false;  // Enable name mangling
     options.drop = ['console', 'debugger'];
     options.treeShaking = true;
     options.minifyWhitespace = true;

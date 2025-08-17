@@ -8,8 +8,8 @@ import type {
 import { InterceptorManager } from '../interceptors/InterceptorManager';
 import { dispatchRequest } from '../interceptors/dispatchRequest';
 import { getDefaultAdapter, type Adapter } from '../adapters';
-import { mergeConfig } from './mergeConfig';
-import { buildFullPath } from '../utils/url';
+import { mergeConfig } from './mergeConfig-minimal';
+import { buildFullPath } from './buildFullPath';
 import { defaults } from './defaults';
 
 /**
@@ -70,6 +70,12 @@ export class fluxhttp implements fluxhttpInstance {
    * @type {Adapter}
    */
   private adapter: Adapter;
+
+  /**
+   * Whether this instance has been disposed
+   * @private
+   */
+  private disposed = false;
 
   /**
    * Create a new fluxhttp instance
@@ -339,5 +345,65 @@ export class fluxhttp implements fluxhttpInstance {
   create(config?: fluxhttpRequestConfig): fluxhttpInstance {
     const mergedConfig = mergeConfig(this.defaults, config);
     return new fluxhttp(mergedConfig);
+  }
+
+  /**
+   * Dispose of the fluxhttp instance and clean up all resources
+   * This includes interceptors, caches, and any background timers
+   * @example
+   * ```typescript
+   * // Clean up when done with the client
+   * client.dispose();
+   * ```
+   */
+  dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+
+    this.disposed = true;
+
+    // Dispose interceptor managers
+    if (this.interceptors.request && typeof this.interceptors.request.dispose === 'function') {
+      this.interceptors.request.dispose();
+    }
+    if (this.interceptors.response && typeof this.interceptors.response.dispose === 'function') {
+      this.interceptors.response.dispose();
+    }
+
+    // Clear defaults to help with garbage collection
+    this.defaults = {};
+  }
+
+  /**
+   * Check if the instance has been disposed
+   * @returns {boolean} True if disposed
+   */
+  isDisposed(): boolean {
+    return this.disposed;
+  }
+
+  /**
+   * Get memory usage statistics for this instance
+   * @returns {object} Memory usage statistics
+   */
+  getMemoryStats(): {
+    interceptors: {
+      request: any;
+      response: any;
+    };
+    disposed: boolean;
+  } {
+    return {
+      interceptors: {
+        request: this.interceptors.request && typeof this.interceptors.request.getStats === 'function' 
+          ? this.interceptors.request.getStats() 
+          : { size: this.interceptors.request?.size || 0 },
+        response: this.interceptors.response && typeof this.interceptors.response.getStats === 'function'
+          ? this.interceptors.response.getStats()
+          : { size: this.interceptors.response?.size || 0 },
+      },
+      disposed: this.disposed,
+    };
   }
 }

@@ -1,6 +1,12 @@
-# fluxhttp API Documentation
+# @fluxhttp/core API Documentation
 
-fluxhttp is a modern, comprehensive HTTP client library for JavaScript/TypeScript that rivals and surpasses Axios with zero dependencies, full TypeScript support, and isomorphic capabilities. With 298 comprehensive tests and 85% coverage, fluxhttp provides a reliable foundation for all your HTTP needs.
+> ⚠️ **ALPHA SOFTWARE WARNING** ⚠️
+> 
+> This software is in early alpha development and should **NOT** be used in production environments.
+> Features may be incomplete, unstable, or subject to breaking changes without notice.
+> Test coverage and documentation are still under development.
+
+@fluxhttp/core is an experimental HTTP client library for JavaScript/TypeScript with zero dependencies and full TypeScript support. This project is under active development with the goal of creating a modern, lightweight alternative to existing HTTP clients.
 
 ## Table of Contents
 
@@ -18,13 +24,13 @@ fluxhttp is a modern, comprehensive HTTP client library for JavaScript/TypeScrip
 ## Installation
 
 ```bash
-npm install fluxhttp
+npm install @fluxhttp/core
 # or
-yarn add fluxhttp
+yarn add @fluxhttp/core
 # or
-pnpm add fluxhttp
+pnpm add @fluxhttp/core
 # or
-bun add fluxhttp
+bun add @fluxhttp/core
 ```
 
 ## Quick Start
@@ -32,7 +38,7 @@ bun add fluxhttp
 ### Basic Usage
 
 ```typescript
-import fluxhttp from 'fluxhttp';
+import fluxhttp from '@fluxhttp/core';
 
 // GET request
 const response = await fluxhttp.get('https://api.example.com/users');
@@ -56,7 +62,7 @@ try {
 ### Creating Custom Instance
 
 ```typescript
-import { create } from 'fluxhttp';
+import { create } from '@fluxhttp/core';
 
 const apiClient = create({
   baseURL: 'https://api.example.com',
@@ -182,7 +188,7 @@ console.log(options.headers['allow']);
 Creates a new fluxhttp instance with custom configuration.
 
 ```typescript
-import { create } from 'fluxhttp';
+import { create } from '@fluxhttp/core';
 
 const apiClient = create({
   baseURL: 'https://api.example.com',
@@ -195,7 +201,7 @@ const apiClient = create({
 Helper for executing multiple requests concurrently.
 
 ```typescript
-import { all } from 'fluxhttp';
+import { all } from '@fluxhttp/core';
 
 const [users, posts, comments] = await all([
   fluxhttp.get('/users'),
@@ -209,7 +215,7 @@ const [users, posts, comments] = await all([
 Helper for spreading array results to function arguments.
 
 ```typescript
-import { spread } from 'fluxhttp';
+import { spread } from '@fluxhttp/core';
 
 fluxhttp.all([
   fluxhttp.get('/users'),
@@ -225,7 +231,7 @@ fluxhttp.all([
 Type guard to check if an error is an fluxhttp error.
 
 ```typescript
-import { isfluxhttpError } from 'fluxhttp';
+import { isfluxhttpError } from '@fluxhttp/core';
 
 try {
   await fluxhttp.get('/api/data');
@@ -242,7 +248,7 @@ try {
 Checks if an error was caused by request cancellation.
 
 ```typescript
-import { isCancel } from 'fluxhttp';
+import { isCancel } from '@fluxhttp/core';
 
 try {
   await fluxhttp.get('/api/data');
@@ -289,14 +295,14 @@ interface fluxhttpRequestConfig {
   decompress?: boolean;
   signal?: AbortSignal;
   
-  // Progress tracking
+  // Progress tracking ⚠️ Coming Soon
   onUploadProgress?: (progressEvent: ProgressEvent) => void;
   onDownloadProgress?: (progressEvent: ProgressEvent) => void;
   
-  // Retry configuration
+  // Retry configuration ⚠️ Coming Soon
   retry?: RetryConfig;
   
-  // Cache configuration
+  // Cache configuration ⚠️ Coming Soon
   cache?: CacheConfig;
   
   // Data transformation
@@ -632,7 +638,7 @@ const customClient = create<CustomConfig>({
 ### Type Guards
 
 ```typescript
-import { isfluxhttpError, fluxhttpError } from 'fluxhttp';
+import { isfluxhttpError, fluxhttpError } from '@fluxhttp/core';
 
 async function fetchUser(id: number) {
   try {
@@ -694,10 +700,10 @@ const client = create({
 });
 ```
 
-### Progress Tracking
+### Progress Tracking ⚠️ Coming Soon
 
 ```typescript
-// Upload progress
+// Upload progress - FEATURE UNDER DEVELOPMENT
 await fluxhttp.post('/upload', formData, {
   onUploadProgress: (progressEvent) => {
     const progress = (progressEvent.loaded / progressEvent.total!) * 100;
@@ -705,7 +711,7 @@ await fluxhttp.post('/upload', formData, {
   }
 });
 
-// Download progress
+// Download progress - FEATURE UNDER DEVELOPMENT
 await fluxhttp.get('/large-file', {
   onDownloadProgress: (progressEvent) => {
     const progress = (progressEvent.loaded / progressEvent.total!) * 100;
@@ -762,9 +768,10 @@ results.forEach((result, index) => {
 });
 ```
 
-### Response Caching
+### Response Caching ⚠️ Coming Soon
 
 ```typescript
+// FEATURE UNDER DEVELOPMENT
 const cache = new Map();
 
 const cachedClient = create({
@@ -804,7 +811,7 @@ fluxhttp provides a nearly identical API to Axios, making migration straightforw
 import axios from 'axios';
 
 // fluxhttp
-import fluxhttp from 'fluxhttp';
+import fluxhttp from '@fluxhttp/core';
 
 // Most code works without changes
 const response = await fluxhttp.get('/users');
@@ -940,4 +947,6 @@ useEffect(() => {
 }, []);
 ```
 
-This completes the comprehensive API documentation for fluxhttp. The library provides a modern, type-safe, and feature-rich HTTP client that can serve as a drop-in replacement for Axios with additional benefits.
+This completes the API documentation for @fluxhttp/core. 
+
+⚠️ **ALPHA REMINDER**: This library is under active development. Many advanced features are still being implemented. Please check the changelog and issues for the latest status updates.

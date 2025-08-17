@@ -1,4 +1,13 @@
-import { combineURLs, isAbsoluteURL } from '../utils/url';
+// Minimal URL building without external dependencies
+function isAbsoluteURL(url: string): boolean {
+  return /^https?:\/\//.test(url);
+}
+
+function combineURLs(baseURL: string, relativeURL: string): string {
+  const base = baseURL.replace(/\/+$/, '');
+  const relative = relativeURL.replace(/^\/+/, '');
+  return `${base}/${relative}`;
+}
 
 export function buildFullPath(baseURL?: string, requestedURL?: string): string {
   if (!requestedURL) {

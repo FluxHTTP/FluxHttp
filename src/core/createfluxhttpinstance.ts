@@ -1,8 +1,8 @@
 import type { fluxhttpStatic, fluxhttpRequestConfig, fluxhttpInstance } from '../types';
 import { fluxhttp } from './fluxhttp';
 import { fluxhttpError } from '../errors';
-import { mergeConfig } from './mergeConfig';
-import { isCancel as isCancelToken } from './canceltoken';
+import { mergeConfig } from './mergeConfig-minimal';
+import { isCancel as isCancelToken } from './canceltoken-minimal';
 
 // Type guard to check if a key is a valid fluxhttp property
 function isFluxhttpKey(key: string | symbol | number, obj: fluxhttp): key is keyof fluxhttp {

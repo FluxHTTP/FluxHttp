@@ -1,5 +1,17 @@
 import type { fluxhttpRequestConfig, Headers } from '../types';
-import { isPlainObject, isFormData, isURLSearchParams } from '../utils/data';
+
+// Minimal type checks for defaults
+function isFormData(value: unknown): value is FormData {
+  return typeof FormData !== 'undefined' && value instanceof FormData;
+}
+
+function isURLSearchParams(value: unknown): value is URLSearchParams {
+  return typeof URLSearchParams !== 'undefined' && value instanceof URLSearchParams;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+}
 
 /**
  * Default configuration for fluxhttp requests

@@ -1,0 +1,6 @@
+{
+  "testMatch": ["tests/**/*.test.{js,ts}"],
+  "testTimeout": 10000,
+  "forceExit": true,
+  "verbose": true
+}

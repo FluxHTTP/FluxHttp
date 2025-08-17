@@ -5,6 +5,7 @@ export type Adapter = <T = unknown>(config: fluxhttpRequestConfig) => Promise<fl
 export { xhrAdapter } from './xhr.adapter';
 export { httpAdapter } from './http.adapter';
 export { fetchAdapter } from './fetch.adapter';
+export { mockAdapter, createMockAdapter, MockAdapter } from './mock.adapter';
 
 export function getDefaultAdapter(): Adapter {
   let adapter: Adapter;
