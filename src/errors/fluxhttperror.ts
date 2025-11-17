@@ -2,6 +2,7 @@ import type {
   fluxhttpRequestConfig,
   fluxhttpResponse,
   fluxhttpError as IfluxhttpError,
+  Headers,
 } from '../types';
 
 /**
@@ -149,7 +150,7 @@ export class fluxhttpError extends Error implements IfluxhttpError {
     if (!stack) return stack;
 
     // Remove sensitive file paths and internal details in production
-    if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production') {
+    if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production') {
       return 'Stack trace hidden in production';
     }
 
@@ -199,10 +200,11 @@ export class fluxhttpError extends Error implements IfluxhttpError {
   /**
    * SECURITY: Sanitize headers to remove sensitive information
    */
-  private sanitizeHeaders(headers: Record<string, unknown>): Record<string, unknown> {
-    const sanitized: Record<string, unknown> = {};
+  private sanitizeHeaders(headers: Headers): Headers {
+    // BUG-003 fixed: Return proper Headers type
+    const sanitized: Headers = {};
     const sensitiveHeaders = [
-      'authorization', 'cookie', 'set-cookie', 'x-api-key', 
+      'authorization', 'cookie', 'set-cookie', 'x-api-key',
       'x-auth-token', 'x-csrf-token', 'x-session-id'
     ];
 

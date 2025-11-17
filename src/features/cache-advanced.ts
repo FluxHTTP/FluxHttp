@@ -285,9 +285,14 @@ export class CacheControlParser {
     if (!cacheControl) return directives;
 
     const parts = cacheControl.split(',').map(part => part.trim());
-    
+
     for (const part of parts) {
-      const [key, value] = part.split('=');
+      const splitResult = part.split('=');
+      const key = splitResult[0];
+      const value = splitResult[1];
+
+      if (!key) continue; // FIXED BUG-017: Skip if key is undefined
+
       if (value !== undefined) {
         directives[key.trim()] = value.trim().replace(/"/g, '');
       } else {
@@ -316,9 +321,14 @@ export class CacheControlParser {
    */
   static getTtl(cacheControl: string): number | null {
     const directives = this.parse(cacheControl);
-    
+
     if (directives['max-age']) {
-      return parseInt(directives['max-age'] as string, 10) * 1000;
+      const maxAge = parseInt(directives['max-age'] as string, 10);
+      // FIXED BUG-015: Validate parseInt result
+      if (isNaN(maxAge) || maxAge < 0) {
+        return null;
+      }
+      return maxAge * 1000;
     }
 
     return null;
@@ -329,9 +339,14 @@ export class CacheControlParser {
    */
   static getStaleWhileRevalidate(cacheControl: string): number | null {
     const directives = this.parse(cacheControl);
-    
+
     if (directives['stale-while-revalidate']) {
-      return parseInt(directives['stale-while-revalidate'] as string, 10) * 1000;
+      const swr = parseInt(directives['stale-while-revalidate'] as string, 10);
+      // FIXED BUG-015: Validate parseInt result
+      if (isNaN(swr) || swr < 0) {
+        return null;
+      }
+      return swr * 1000;
     }
 
     return null;

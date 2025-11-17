@@ -72,7 +72,7 @@ export class PooledHttpAgent extends http.Agent {
   private destroyed = false;
   private maxHostStats = 100; // Maximum number of hosts to track
   private cleanupTimer: NodeJS.Timeout | null = null;
-  private lastCleanup = Date.now();
+  // lastCleanup removed - BUG-008 fixed: unused variable
 
   /**
    * Create a new pooled HTTP agent
@@ -284,7 +284,6 @@ export class PooledHttpAgent extends http.Agent {
       socketTimeouts: 0,
       socketErrors: 0,
     };
-    this.lastCleanup = Date.now();
   }
 
   /**
@@ -383,9 +382,8 @@ export class PooledHttpAgent extends http.Agent {
         hostsToRemove.push(sortedHosts[i][0]);
       }
     }
-    
+
     hostsToRemove.forEach(host => this.stats.delete(host));
-    this.lastCleanup = Date.now();
   }
 
   /**

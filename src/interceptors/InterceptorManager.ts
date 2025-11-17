@@ -302,8 +302,11 @@ export class InterceptorManager<T> implements IInterceptorManager<T> {
 
     // Remove the oldest ones
     for (let i = 0; i < evictionCount && i < sortedInterceptors.length; i++) {
-      const [id] = sortedInterceptors[i];
-      this.interceptors.delete(id);
+      const entry = sortedInterceptors[i];
+      if (entry) { // BUG-004 fixed: Safe destructuring after undefined check
+        const [id] = entry;
+        this.interceptors.delete(id);
+      }
     }
   }
 

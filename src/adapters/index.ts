@@ -18,7 +18,7 @@ export function getDefaultAdapter(): Adapter {
       const { xhrAdapter } = await import('./xhr.adapter');
       return xhrAdapter<T>(config);
     };
-  } else if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+  } else if (typeof process !== 'undefined' && process && typeof process.versions === 'object' && process.versions && process.versions.node) {
     // Node.js environment
     adapter = async function httpAdapterWrapper<T = unknown>(
       config: fluxhttpRequestConfig
