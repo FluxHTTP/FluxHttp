@@ -110,7 +110,7 @@ export async function executeWithRetry<T>(
       const delay = strategy.getDelay(attempt, retryConfig, lastError);
 
       // Log retry attempt (could be replaced with proper logging)
-      if (process.env.NODE_ENV !== 'test') {
+      if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'test') {
         // Retry attempt logged internally
       }
 

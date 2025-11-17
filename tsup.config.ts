@@ -6,9 +6,9 @@ export default defineConfig({
     'full': 'src/index.ts'
   },
   format: ['cjs', 'esm'],
-  dts: false,
+  dts: true,  // FIXED BUG-010: Enable TypeScript declaration files
   splitting: false,  // Disable splitting to reduce bundle count
-  sourcemap: false,  // Disable source maps to reduce size
+  sourcemap: true,  // FIXED BUG-011: Enable source maps for debugging
   clean: true,
   minify: true,
   treeshake: {

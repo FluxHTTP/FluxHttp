@@ -110,8 +110,11 @@ export class RequestDeduplicator {
         
         const toRemove = this.pendingRequests.size - this.maxCacheSize;
         for (let i = 0; i < toRemove; i++) {
-          const [key] = sortedEntries[i];
-          this.pendingRequests.delete(key);
+          const entry = sortedEntries[i];
+          if (entry) { // BUG-004 fixed: Check undefined before destructuring
+            const [key] = entry;
+            this.pendingRequests.delete(key);
+          }
         }
       }
     };
@@ -371,11 +374,14 @@ export class RequestDeduplicator {
     if (this.pendingRequests.size >= this.maxCacheSize) {
       const sortedEntries = Array.from(this.pendingRequests.entries())
         .sort(([, a], [, b]) => a.timestamp - b.timestamp);
-      
+
       const toRemove = Math.max(1, Math.floor(this.maxCacheSize * 0.25)); // Remove 25%
       for (let i = 0; i < toRemove && i < sortedEntries.length; i++) {
-        const [key] = sortedEntries[i];
-        this.pendingRequests.delete(key);
+        const entry = sortedEntries[i];
+        if (entry) {
+          const [key] = entry;
+          this.pendingRequests.delete(key);
+        }
       }
     }
   }
@@ -442,19 +448,23 @@ export class RequestDeduplicator {
 export const defaultDeduplicator = new RequestDeduplicator();
 
 // Clean up default deduplicator on process exit
-if (typeof process !== 'undefined' && process.on) {
+if (typeof process !== 'undefined' && process && typeof process.on === 'function') {
   process.on('exit', () => {
     defaultDeduplicator.destroy();
   });
-  
+
   process.on('SIGTERM', () => {
     defaultDeduplicator.destroy();
-    process.exit(0);
+    if (typeof process !== 'undefined' && process && typeof process.exit === 'function') {
+      process.exit(0);
+    }
   });
-  
+
   process.on('SIGINT', () => {
     defaultDeduplicator.destroy();
-    process.exit(0);
+    if (typeof process !== 'undefined' && process && typeof process.exit === 'function') {
+      process.exit(0);
+    }
   });
 }
 
