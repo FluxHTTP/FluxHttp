@@ -70,6 +70,10 @@ export class CancelTokenSource {
    * @constructor
    */
   constructor() {
+    // BUG-001 FIX: Check if AbortController is available
+    if (typeof AbortController === 'undefined') {
+      throw new Error('AbortController is not available in this environment. Please use a polyfill or upgrade your runtime.');
+    }
     this._controller = new AbortController();
 
     let resolvePromise: (cancel: Cancel) => void;

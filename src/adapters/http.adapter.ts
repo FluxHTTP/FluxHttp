@@ -180,10 +180,22 @@ export function httpAdapter<T = unknown>(
         const encoding = res.headers['content-encoding'];
         if (encoding === 'gzip') {
           responseStream = res.pipe(zlib.createGunzip());
+          // BUG-012 FIX: Add error handlers to decompression streams
+          responseStream.on('error', (error: Error) => {
+            reject(createNetworkError(`Decompression error (gzip): ${error.message}`, config, req));
+          });
         } else if (encoding === 'deflate') {
           responseStream = res.pipe(zlib.createInflateRaw());
+          // BUG-012 FIX: Add error handlers to decompression streams
+          responseStream.on('error', (error: Error) => {
+            reject(createNetworkError(`Decompression error (deflate): ${error.message}`, config, req));
+          });
         } else if (encoding === 'br') {
           responseStream = res.pipe(zlib.createBrotliDecompress());
+          // BUG-012 FIX: Add error handlers to decompression streams
+          responseStream.on('error', (error: Error) => {
+            reject(createNetworkError(`Decompression error (brotli): ${error.message}`, config, req));
+          });
         }
       }
 
@@ -253,7 +265,13 @@ export function httpAdapter<T = unknown>(
     // Write request data
     if (requestData) {
       if (isStream(requestData) && typeof requestData === 'object' && 'pipe' in requestData) {
-        (requestData as unknown as NodeJS.ReadableStream).pipe(req);
+        // BUG-008 FIX: Add error handling to the stream to prevent hanging
+        const sourceStream = requestData as unknown as NodeJS.ReadableStream;
+        sourceStream.on('error', (error: Error) => {
+          req.destroy();
+          reject(createNetworkError(`Stream error: ${error.message}`, config, req));
+        });
+        sourceStream.pipe(req);
       } else {
         const dataStr = typeof requestData === 'string' ? requestData : JSON.stringify(requestData);
         req.write(dataStr);

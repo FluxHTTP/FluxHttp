@@ -80,6 +80,8 @@ export class CircuitBreaker {
   private lastFailureTime = 0;
   private requestHistory: RequestAttempt[] = [];
   private stateChangeListeners: Array<(state: CircuitState, stats: CircuitBreakerStats) => void> = [];
+  // BUG-003 FIX: Add instance variable to track rejected requests
+  private rejectedRequestsCount = 0;
 
   constructor(private config: Required<CircuitBreakerConfig>) {}
 
@@ -154,8 +156,8 @@ export class CircuitBreaker {
    * Record a rejected request (circuit open)
    */
   private recordRejection(): void {
-    // Rejections don't go in request history but are tracked separately
-    this.getStats().rejectedRequests++;
+    // BUG-003 FIX: Increment instance variable instead of mutating returned stats
+    this.rejectedRequestsCount++;
   }
 
   /**
@@ -284,7 +286,7 @@ export class CircuitBreaker {
       lastSuccessTime: this.requestHistory
         .filter(attempt => attempt.success)
         .pop()?.timestamp,
-      rejectedRequests: 0, // This would need to be tracked separately
+      rejectedRequests: this.rejectedRequestsCount, // BUG-003 FIX: Return tracked value
       averageResponseTime
     };
   }
@@ -315,6 +317,8 @@ export class CircuitBreaker {
     this.successCount = 0;
     this.lastFailureTime = 0;
     this.requestHistory = [];
+    // BUG-003 FIX: Reset rejected requests counter
+    this.rejectedRequestsCount = 0;
   }
 
   /**
@@ -600,10 +604,11 @@ export class AdvancedRetryMechanism {
    */
   private applyJitter(delay: number, jitterConfig: Required<AdvancedRetryConfig>['jitter'], attempt: number): number {
     const { type, maxJitter } = jitterConfig;
-    
+
     switch (type) {
       case 'full':
-        return delay * (Math.random() * maxJitter);
+        // BUG-018 FIX: Use (1 - maxJitter * Math.random()) to avoid too-small delays
+        return delay * (1 - maxJitter * Math.random());
       case 'equal':
         return delay + (Math.random() * delay * maxJitter);
       case 'decorrelated':
