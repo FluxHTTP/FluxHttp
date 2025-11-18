@@ -276,6 +276,12 @@ export class CircuitBreaker {
       ? responseTimes.reduce((sum, time) => sum + time, 0) / responseTimes.length 
       : 0;
 
+    // BUG-017 FIX: Explicitly handle case where lastSuccessTime may be undefined
+    const successfulAttempts = this.requestHistory.filter(attempt => attempt.success);
+    const lastSuccessTime = successfulAttempts.length > 0
+      ? successfulAttempts[successfulAttempts.length - 1]?.timestamp
+      : undefined;
+
     return {
       state: this.state,
       totalRequests,
@@ -283,9 +289,7 @@ export class CircuitBreaker {
       successfulRequests,
       failureRate,
       lastFailureTime: this.lastFailureTime || undefined,
-      lastSuccessTime: this.requestHistory
-        .filter(attempt => attempt.success)
-        .pop()?.timestamp,
+      lastSuccessTime,
       rejectedRequests: this.rejectedRequestsCount, // BUG-003 FIX: Return tracked value
       averageResponseTime
     };

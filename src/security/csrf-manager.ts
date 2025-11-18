@@ -83,7 +83,17 @@ export class CSRFManager {
   async generateCSRFToken(): Promise<string> {
     const tokenLength = this.config.tokenLength;
     const randomBytes = SecurityCrypto.generateSecureBytes(tokenLength);
-    const token = btoa(String.fromCharCode.apply(null, Array.from(randomBytes)))
+
+    // BUG-011 FIX: Use chunked conversion to avoid issues with large tokens
+    // and handle potential btoa() errors gracefully
+    let binaryString = '';
+    const CHUNK_SIZE = 8192;
+    for (let i = 0; i < randomBytes.length; i += CHUNK_SIZE) {
+      const chunk = randomBytes.slice(i, i + CHUNK_SIZE);
+      binaryString += String.fromCharCode.apply(null, Array.from(chunk) as any);
+    }
+
+    const token = btoa(binaryString)
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .replace(/=/g, '');

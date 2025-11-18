@@ -145,11 +145,15 @@ export class RateLimiter {
           // Sort by last cleanup time (ascending) - oldest first
           return (a.lastCleanup || 0) - (b.lastCleanup || 0);
         });
-      
+
       const toRemove = this.rateLimitState.size - this.maxStateEntries;
+      // BUG-015 FIX: Add bounds check and null safety before accessing array elements
       for (let i = 0; i < toRemove && i < sortedEntries.length; i++) {
-        const [key] = sortedEntries[i];
-        this.rateLimitState.delete(key);
+        const entry = sortedEntries[i];
+        if (entry) {
+          const [key] = entry;
+          this.rateLimitState.delete(key);
+        }
       }
     }
     
