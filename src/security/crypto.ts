@@ -12,6 +12,20 @@ export class SecurityCrypto {
   private static decoder = typeof TextDecoder !== 'undefined' ? new TextDecoder() : null;
 
   /**
+   * BUG-002 FIX: Convert Uint8Array to string in chunks to avoid stack overflow
+   * String.fromCharCode.apply fails for arrays larger than ~65,536 elements
+   */
+  private static uint8ArrayToString(bytes: Uint8Array): string {
+    const CHUNK_SIZE = 8192; // Safe chunk size
+    let result = '';
+    for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+      const chunk = bytes.slice(i, i + CHUNK_SIZE);
+      result += String.fromCharCode.apply(null, Array.from(chunk) as any);
+    }
+    return result;
+  }
+
+  /**
    * Generate cryptographically secure random bytes
    * Falls back to less secure Math.random if crypto APIs unavailable
    */
@@ -31,15 +45,11 @@ export class SecurityCrypto {
         const buffer = nodeCrypto.randomBytes(length);
         return new Uint8Array(buffer);
       } catch {
-        // Fallback to Math.random (less secure)
+        // Fall through to error
       }
     }
-    // Fallback: less secure but better than nothing
-    const bytes = new Uint8Array(length);
-    for (let i = 0; i < length; i++) {
-      bytes[i] = Math.floor(Math.random() * 256);
-    }
-    return bytes;
+    // BUG-004 FIX: Fail securely instead of using Math.random() for cryptographic operations
+    throw new Error('Cryptographically secure random number generator is not available. Please use a modern browser or Node.js environment with crypto support.');
   }
 
   /**
@@ -113,7 +123,7 @@ export class SecurityCrypto {
     combined.set(iv);
     combined.set(new Uint8Array(encrypted), iv.length);
 
-    return 'aes:' + btoa(String.fromCharCode.apply(null, Array.from(combined)));
+    return 'aes:' + btoa(this.uint8ArrayToString(combined));
   }
 
   /**
@@ -170,7 +180,7 @@ export class SecurityCrypto {
     combined.set(mac, iv.length);
     combined.set(encrypted, iv.length + mac.length);
 
-    return btoa(String.fromCharCode.apply(null, Array.from(combined)));
+    return btoa(this.uint8ArrayToString(combined));
   }
 
   /**

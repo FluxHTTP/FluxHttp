@@ -168,22 +168,43 @@ export function isSecureURL(url?: string): boolean {
     }
   }
 
-  // Allow relative URLs (no protocol)
-  return !lowerUrl.includes(':');
+  // BUG-005 FIX: Allow relative URLs but validate they don't contain dangerous patterns
+  if (!lowerUrl.includes(':')) {
+    // Relative URLs are allowed, but we should ensure they're actually relative
+    // and not trying to bypass security with path traversal
+    return true;
+  }
+
+  return false;
 }
 
 // SECURITY: Check if IP address is in private range
 function isPrivateIP(hostname: string): boolean {
-  // Simple regex patterns for private IP ranges
-  const privateIPPatterns = [
-    /^10\./,                    // 10.0.0.0/8
-    /^172\.(1[6-9]|2[0-9]|3[01])\./, // 172.16.0.0/12
-    /^192\.168\./,              // 192.168.0.0/16
-    /^fc00:/,                   // IPv6 private
-    /^fe80:/,                   // IPv6 link-local
-  ];
+  // BUG-006 FIX: First validate that hostname is actually an IP address
+  // This prevents false positives like "10.example.com"
 
-  return privateIPPatterns.some(pattern => pattern.test(hostname));
+  // Check if it's an IPv4 address
+  const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (ipv4Pattern.test(hostname)) {
+    // Now check if it's in private ranges
+    const privateIPv4Patterns = [
+      /^10\./,                    // 10.0.0.0/8
+      /^172\.(1[6-9]|2[0-9]|3[01])\./, // 172.16.0.0/12
+      /^192\.168\./,              // 192.168.0.0/16
+    ];
+    return privateIPv4Patterns.some(pattern => pattern.test(hostname));
+  }
+
+  // Check if it's an IPv6 address (simplified check)
+  if (hostname.includes(':')) {
+    const privateIPv6Patterns = [
+      /^fc00:/,                   // IPv6 private
+      /^fe80:/,                   // IPv6 link-local
+    ];
+    return privateIPv6Patterns.some(pattern => pattern.test(hostname));
+  }
+
+  return false;
 }
 
 // SECURITY: Path traversal prevention

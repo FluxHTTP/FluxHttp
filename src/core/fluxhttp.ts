@@ -119,6 +119,11 @@ export class fluxhttp implements fluxhttpInstance {
   async request<T = unknown>(
     configOrUrl: fluxhttpRequestConfig | string
   ): Promise<fluxhttpResponse<T>> {
+    // BUG-010 FIX: Check if instance has been disposed
+    if (this.disposed) {
+      throw new Error('Cannot execute request on disposed fluxhttp instance');
+    }
+
     let config: fluxhttpRequestConfig;
 
     if (typeof configOrUrl === 'string') {

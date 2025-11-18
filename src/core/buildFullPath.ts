@@ -10,7 +10,11 @@ function combineURLs(baseURL: string, relativeURL: string): string {
 }
 
 export function buildFullPath(baseURL?: string, requestedURL?: string): string {
-  if (!requestedURL) {
+  // BUG-019 FIX: Explicitly handle null, undefined, and empty string cases
+  const hasRequestedURL = requestedURL !== null && requestedURL !== undefined && requestedURL !== '';
+  const hasBaseURL = baseURL !== null && baseURL !== undefined && baseURL !== '';
+
+  if (!hasRequestedURL) {
     return baseURL || '';
   }
 
@@ -18,7 +22,7 @@ export function buildFullPath(baseURL?: string, requestedURL?: string): string {
     return requestedURL;
   }
 
-  if (baseURL) {
+  if (hasBaseURL) {
     return combineURLs(baseURL, requestedURL);
   }
 

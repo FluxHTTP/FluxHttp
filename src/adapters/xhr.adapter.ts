@@ -186,6 +186,10 @@ export function xhrAdapter<T = unknown>(
       }
     });
 
+    // BUG-007 FIX: Declare cleanup wrappers before using them
+    let resolveWithCleanup: (response: fluxhttpResponse<T>) => void;
+    let rejectWithCleanup: (error: unknown) => void;
+
     xhr.onloadend = (): void => {
       if (!xhr) return;
 
@@ -206,9 +210,9 @@ export function xhrAdapter<T = unknown>(
           config.validateStatus || ((status: number): boolean => status >= 200 && status < 300);
 
         if (validateStatus(xhr.status)) {
-          resolve(response);
+          resolveWithCleanup(response);
         } else {
-          reject(
+          rejectWithCleanup(
             createError(
               `Request failed with status ${xhr.status}`,
               'ERR_BAD_RESPONSE',
@@ -219,7 +223,7 @@ export function xhrAdapter<T = unknown>(
           );
         }
       } catch (error) {
-        reject(
+        rejectWithCleanup(
           createError(
             error instanceof Error ? error.message : 'Failed to parse response',
             'ERR_PARSE_RESPONSE',
@@ -231,11 +235,11 @@ export function xhrAdapter<T = unknown>(
     };
 
     xhr.onerror = (): void => {
-      reject(createNetworkError('Network Error', config, xhr));
+      rejectWithCleanup(createNetworkError('Network Error', config, xhr));
     };
 
     xhr.ontimeout = (): void => {
-      reject(createTimeoutError(config, xhr));
+      rejectWithCleanup(createTimeoutError(config, xhr));
     };
 
     // Progress handlers
@@ -263,20 +267,46 @@ export function xhrAdapter<T = unknown>(
       };
     }
 
+    // BUG-007 FIX: Create cleanup function to remove event listeners and prevent memory leaks
+    const abortHandlers: Array<() => void> = [];
+    let isRequestComplete = false;
+
+    const cleanup = (): void => {
+      isRequestComplete = true;
+      // Remove all abort handlers
+      abortHandlers.forEach(handler => handler());
+      abortHandlers.length = 0;
+    };
+
+    // Wrap resolve/reject to ensure cleanup
+    resolveWithCleanup = (response: fluxhttpResponse<T>): void => {
+      cleanup();
+      resolve(response);
+    };
+
+    rejectWithCleanup = (error: unknown): void => {
+      cleanup();
+      reject(error);
+    };
+
     // Handle signal abort
     if (signal) {
-      signal.addEventListener('abort', () => {
+      const abortHandler = (): void => {
         xhr.abort();
-        reject(createCancelError('Request aborted', config));
-      });
+        rejectWithCleanup(createCancelError('Request aborted', config));
+      };
+      signal.addEventListener('abort', abortHandler);
+      abortHandlers.push(() => signal.removeEventListener('abort', abortHandler));
     }
 
     // Handle cancel token
     if (cancelToken) {
-      void cancelToken.promise.then((cancel) => {
+      const cancelPromise = cancelToken.promise.then((cancel) => {
         xhr.abort();
-        reject(createCancelError(cancel.message, config));
+        rejectWithCleanup(createCancelError(cancel.message, config));
       });
+      // Store promise for potential cleanup (though promises can't be truly cancelled)
+      void cancelPromise;
     }
 
     // Transform and send request data

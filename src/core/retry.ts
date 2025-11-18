@@ -94,7 +94,8 @@ export async function executeWithRetry<T>(
     return operation();
   }
 
-  let lastError: fluxhttpError;
+  // BUG-009 FIX: Initialize lastError to prevent uninitialized variable error
+  let lastError: fluxhttpError | undefined;
   let attempt = 0;
 
   while (attempt < (retryConfig.attempts || 3)) {
@@ -119,7 +120,11 @@ export async function executeWithRetry<T>(
     }
   }
 
-  throw lastError!;
+  // BUG-009 FIX: Throw a proper error if lastError is undefined (shouldn't happen, but safe)
+  if (!lastError) {
+    throw new Error('Retry failed: No error captured');
+  }
+  throw lastError;
 }
 
 export const defaultRetryConfig: RetryConfig = {

@@ -149,12 +149,12 @@ export class InterceptorManager<T> implements IInterceptorManager<T> {
 
     this.interceptors.set(id, interceptor);
 
-    // Track interceptor functions for cleanup
-    if (onFulfilled && typeof onFulfilled === 'object') {
-      this.interceptorRefs.add(onFulfilled);
+    // BUG-013 FIX: Track interceptor functions for cleanup (functions are typeof 'function', not 'object')
+    if (onFulfilled && typeof onFulfilled === 'function') {
+      this.interceptorRefs.add(onFulfilled as object);
     }
-    if (onRejected && typeof onRejected === 'object') {
-      this.interceptorRefs.add(onRejected);
+    if (onRejected && typeof onRejected === 'function') {
+      this.interceptorRefs.add(onRejected as object);
     }
 
     return id;
