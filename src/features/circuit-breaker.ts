@@ -3,7 +3,7 @@
  * @module @fluxhttp/core/features/circuit-breaker
  */
 
-import type { fluxhttpRequestConfig, fluxhttpResponse, fluxhttpError } from '../types';
+import type { fluxhttpResponse, fluxhttpError } from '../types';
 
 /**
  * Circuit breaker states
@@ -83,7 +83,11 @@ export class CircuitBreaker {
   // BUG-003 FIX: Add instance variable to track rejected requests
   private rejectedRequestsCount = 0;
 
-  constructor(private config: Required<CircuitBreakerConfig>) {}
+  // BUG-027 FIX: Accept config with optional shouldTrigger and isSuccess
+  constructor(
+    private config: Required<Pick<CircuitBreakerConfig, 'failureThreshold' | 'successThreshold' | 'timeout' | 'monitoringWindow' | 'minimumRequests' | 'name'>> &
+      Pick<CircuitBreakerConfig, 'shouldTrigger' | 'isSuccess'>
+  ) {}
 
   /**
    * Execute a request through the circuit breaker
@@ -485,55 +489,57 @@ export class AdvancedRetryMechanism {
 
   /**
    * Merge retry configuration with defaults
+   * BUG-026 FIX: Restructured to avoid duplicate property names in object literal
    */
   private mergeRetryConfig(config?: Partial<AdvancedRetryConfig>): Required<AdvancedRetryConfig> {
+    const defaultJitter = {
+      enabled: true as const,
+      type: 'full' as const,
+      maxJitter: 0.1
+    };
+
+    const defaultRetryCondition = {
+      statusCodes: [408, 429, 500, 502, 503, 504],
+      errorCodes: ['TIMEOUT', 'NETWORK_ERROR', 'CONNECTION_ERROR'],
+      custom: undefined
+    };
+
     return {
-      maxAttempts: 3,
-      initialDelay: 1000,
-      maxDelay: 30000,
-      backoffStrategy: 'exponential',
+      maxAttempts: config?.maxAttempts ?? this.defaultConfig.maxAttempts ?? 3,
+      initialDelay: config?.initialDelay ?? this.defaultConfig.initialDelay ?? 1000,
+      maxDelay: config?.maxDelay ?? this.defaultConfig.maxDelay ?? 30000,
+      backoffStrategy: config?.backoffStrategy ?? this.defaultConfig.backoffStrategy ?? 'exponential',
       jitter: {
-        enabled: true,
-        type: 'full',
-        maxJitter: 0.1
+        enabled: config?.jitter?.enabled ?? this.defaultConfig.jitter?.enabled ?? defaultJitter.enabled,
+        type: config?.jitter?.type ?? this.defaultConfig.jitter?.type ?? defaultJitter.type,
+        maxJitter: config?.jitter?.maxJitter ?? this.defaultConfig.jitter?.maxJitter ?? defaultJitter.maxJitter
       },
       retryCondition: {
-        statusCodes: [408, 429, 500, 502, 503, 504],
-        errorCodes: ['TIMEOUT', 'NETWORK_ERROR', 'CONNECTION_ERROR'],
-        custom: undefined
+        statusCodes: config?.retryCondition?.statusCodes ?? this.defaultConfig.retryCondition?.statusCodes ?? defaultRetryCondition.statusCodes,
+        errorCodes: config?.retryCondition?.errorCodes ?? this.defaultConfig.retryCondition?.errorCodes ?? defaultRetryCondition.errorCodes,
+        custom: config?.retryCondition?.custom ?? this.defaultConfig.retryCondition?.custom
       },
-      attemptTimeout: undefined,
-      totalTimeout: undefined,
-      retryOnNetworkError: true,
-      retryOnTimeout: true,
-      ...this.defaultConfig,
-      ...config,
-      jitter: {
-        ...this.defaultConfig.jitter,
-        ...config?.jitter
-      },
-      retryCondition: {
-        ...this.defaultConfig.retryCondition,
-        ...config?.retryCondition
-      }
+      attemptTimeout: config?.attemptTimeout ?? this.defaultConfig.attemptTimeout,
+      totalTimeout: config?.totalTimeout ?? this.defaultConfig.totalTimeout,
+      retryOnNetworkError: config?.retryOnNetworkError ?? this.defaultConfig.retryOnNetworkError ?? true,
+      retryOnTimeout: config?.retryOnTimeout ?? this.defaultConfig.retryOnTimeout ?? true
     };
   }
 
   /**
    * Merge circuit breaker configuration with defaults
+   * BUG-027 FIX: Changed return type to match actual optional fields
    */
-  private mergeCircuitBreakerConfig(config?: Partial<CircuitBreakerConfig>): Required<CircuitBreakerConfig> {
+  private mergeCircuitBreakerConfig(config?: Partial<CircuitBreakerConfig>): Required<Pick<CircuitBreakerConfig, 'failureThreshold' | 'successThreshold' | 'timeout' | 'monitoringWindow' | 'minimumRequests' | 'name'>> & Pick<CircuitBreakerConfig, 'shouldTrigger' | 'isSuccess'> {
     return {
-      failureThreshold: 0.5,
-      successThreshold: 3,
-      timeout: 60000,
-      monitoringWindow: 60000,
-      minimumRequests: 10,
-      shouldTrigger: undefined,
-      isSuccess: undefined,
-      name: 'default',
-      ...this.defaultCircuitBreakerConfig,
-      ...config
+      failureThreshold: config?.failureThreshold ?? this.defaultCircuitBreakerConfig.failureThreshold ?? 0.5,
+      successThreshold: config?.successThreshold ?? this.defaultCircuitBreakerConfig.successThreshold ?? 3,
+      timeout: config?.timeout ?? this.defaultCircuitBreakerConfig.timeout ?? 60000,
+      monitoringWindow: config?.monitoringWindow ?? this.defaultCircuitBreakerConfig.monitoringWindow ?? 60000,
+      minimumRequests: config?.minimumRequests ?? this.defaultCircuitBreakerConfig.minimumRequests ?? 10,
+      shouldTrigger: config?.shouldTrigger ?? this.defaultCircuitBreakerConfig.shouldTrigger,
+      isSuccess: config?.isSuccess ?? this.defaultCircuitBreakerConfig.isSuccess,
+      name: config?.name ?? this.defaultCircuitBreakerConfig.name ?? 'default'
     };
   }
 

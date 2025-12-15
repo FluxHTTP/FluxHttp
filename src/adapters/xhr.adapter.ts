@@ -269,10 +269,8 @@ export function xhrAdapter<T = unknown>(
 
     // BUG-007 FIX: Create cleanup function to remove event listeners and prevent memory leaks
     const abortHandlers: Array<() => void> = [];
-    let isRequestComplete = false;
 
     const cleanup = (): void => {
-      isRequestComplete = true;
       // Remove all abort handlers
       abortHandlers.forEach(handler => handler());
       abortHandlers.length = 0;
