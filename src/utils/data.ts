@@ -92,15 +92,16 @@ function hasPrototypePollutionKeys(obj: Record<string, unknown>): boolean {
 }
 
 // SECURITY: Safe string encoding to prevent XSS
+// BUG-022 FIX: Encode & first to avoid double-encoding other entities
 function sanitizeString(value: string): string {
   return value
+    .replace(/&/g, '&amp;')   // MUST be first to avoid double-encoding
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;')
     .replace(/\//g, '&#x2F;')
-    .replace(/\\/g, '&#x5C;')
-    .replace(/&/g, '&amp;');
+    .replace(/\\/g, '&#x5C;');
 }
 
 // SECURITY: Detect NoSQL injection patterns

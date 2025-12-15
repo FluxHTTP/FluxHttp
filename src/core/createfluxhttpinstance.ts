@@ -50,9 +50,15 @@ export function createfluxhttpInstance(defaultConfig?: fluxhttpRequestConfig): f
     if (isCancelToken(value)) {
       return true;
     }
-    // Check for fluxhttpError with cancel code
+    // BUG-024 FIX: Check for fluxhttpError with correct cancel code 'ERR_CANCELED'
+    // Also check 'ERR_CANCELLED' (British spelling) and 'ECONNABORTED' for compatibility
     return Boolean(
-      value && typeof value === 'object' && 'code' in value && value.code === 'ECONNABORTED'
+      value &&
+        typeof value === 'object' &&
+        'code' in value &&
+        (value.code === 'ERR_CANCELED' ||
+          value.code === 'ERR_CANCELLED' ||
+          value.code === 'ECONNABORTED')
     );
   };
 

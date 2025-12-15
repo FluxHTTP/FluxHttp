@@ -130,18 +130,26 @@ export class RequestDeduplicator {
     if (this.disposed) {
       return;
     }
-    
+
     this.disposed = true;
-    
+
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval as NodeJS.Timeout);
       this.cleanupInterval = null;
     }
-    
+
     // Clear all pending requests
     this.pendingRequests.clear();
-    
+
     // WeakMap will be automatically garbage collected
+  }
+
+  /**
+   * Alias for destroy() for API consistency with other managers
+   * BUG-023 FIX: Add dispose() method for consistent API across all managers
+   */
+  dispose(): void {
+    this.destroy();
   }
 
   /**
