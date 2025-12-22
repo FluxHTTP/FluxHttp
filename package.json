@@ -172,7 +172,7 @@
     "prettier": "^3.1.0",
     "semantic-release": "^22.0.12",
     "size-limit": "^9.0.0",
-    "tsup": "^8.0.0",
+    "tsup": "^8.5.1",
     "typescript": "^5.3.0",
     "undici": "^6.0.0",
     "ws": "^8.14.2"
