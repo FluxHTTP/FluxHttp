@@ -70,11 +70,20 @@ export class CancelTokenSource {
    * @constructor
    */
   constructor() {
-    // BUG-001 FIX: Check if AbortController is available
-    if (typeof AbortController === 'undefined') {
-      throw new Error('AbortController is not available in this environment. Please use a polyfill or upgrade your runtime.');
+    // Graceful fallback for environments without AbortController
+    if (typeof AbortController !== 'undefined') {
+      this._controller = new AbortController();
+    } else {
+      // Create a dummy controller if missing, to maintain API compatibility
+      this._controller = {
+        signal: { aborted: false } as unknown as AbortSignal,
+        abort: () => {
+          if (this._controller && 'signal' in this._controller) {
+            (this._controller.signal as any).aborted = true;
+          }
+        },
+      } as unknown as AbortController;
     }
-    this._controller = new AbortController();
 
     let resolvePromise: (cancel: Cancel) => void;
 
@@ -96,7 +105,9 @@ export class CancelTokenSource {
 
       const cancel: Cancel = { message };
       this.token.reason = cancel;
-      this._controller.abort();
+      if (this._controller && typeof this._controller.abort === 'function') {
+        this._controller.abort();
+      }
       resolvePromise(cancel);
     };
   }

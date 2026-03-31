@@ -12,10 +12,13 @@ export class SecurityCrypto {
   private static decoder = typeof TextDecoder !== 'undefined' ? new TextDecoder() : null;
 
   /**
-   * BUG-002 FIX: Convert Uint8Array to string in chunks to avoid stack overflow
+   * BUG-002 FIX: Convert Uint8Array to string using TextDecoder when possible
    * String.fromCharCode.apply fails for arrays larger than ~65,536 elements
    */
   private static uint8ArrayToString(bytes: Uint8Array): string {
+    if (this.decoder) {
+      return this.decoder.decode(bytes);
+    }
     const CHUNK_SIZE = 8192; // Safe chunk size
     let result = '';
     for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
@@ -53,25 +56,18 @@ export class SecurityCrypto {
   }
 
   /**
-   * SECURITY: Improved token encryption using AES-GCM when available
-   * Falls back to stronger XOR with HMAC authentication if WebCrypto unavailable
+   * SECURITY: Improved token encryption using AES-GCM
    */
   static async encryptToken(token: string, key: Uint8Array): Promise<string> {
     if (!this.encoder) {
       throw new Error('TextEncoder not available for encryption');
     }
 
-    // Try to use WebCrypto API for AES-GCM encryption
     if (typeof crypto !== 'undefined' && crypto.subtle) {
-      try {
-        return await this.encryptWithAESGCM(token, key);
-      } catch {
-        // Fall through to XOR with HMAC
-      }
+      return await this.encryptWithAESGCM(token, key);
     }
 
-    // Fallback to XOR with HMAC authentication
-    return this.encryptWithXORHMAC(token, key);
+    throw new Error('Cryptographically secure encryption is not available in this environment.');
   }
 
   /**
@@ -82,14 +78,15 @@ export class SecurityCrypto {
       throw new Error('TextDecoder not available for decryption');
     }
 
+    if (!encryptedToken.startsWith('aes:')) {
+      throw new Error('Only AES-GCM encrypted tokens are supported');
+    }
+
     try {
-      // Try AES-GCM first (if format indicates it)
-      if (encryptedToken.startsWith('aes:')) {
+      if (typeof crypto !== 'undefined' && crypto.subtle) {
         return await this.decryptFromAESGCM(encryptedToken.slice(4), key);
       }
-
-      // Try XOR with HMAC (default)
-      return this.decryptFromXORHMAC(encryptedToken, key);
+      throw new Error('Cryptographically secure decryption is not available in this environment.');
     } catch {
       throw new Error('Token decryption failed');
     }
@@ -154,154 +151,5 @@ export class SecurityCrypto {
     );
 
     return this.decoder!.decode(decrypted);
-  }
-
-  /**
-   * SECURITY: XOR encryption with HMAC authentication
-   */
-  private static encryptWithXORHMAC(token: string, key: Uint8Array): string {
-    const tokenBytes = this.encoder!.encode(token);
-    const iv = this.generateSecureBytes(16); // Random IV
-    const encKey = this.deriveKey(key, iv, 'encrypt');
-    const macKey = this.deriveKey(key, iv, 'mac');
-    
-    // XOR encryption
-    const encrypted = new Uint8Array(tokenBytes.length);
-    for (let i = 0; i < tokenBytes.length; i++) {
-      encrypted[i] = tokenBytes[i]! ^ encKey[i % encKey.length]!;
-    }
-
-    // Compute HMAC
-    const mac = this.computeHMAC(macKey, iv, encrypted);
-    
-    // Combine IV + MAC + ciphertext
-    const combined = new Uint8Array(iv.length + mac.length + encrypted.length);
-    combined.set(iv);
-    combined.set(mac, iv.length);
-    combined.set(encrypted, iv.length + mac.length);
-
-    return btoa(this.uint8ArrayToString(combined));
-  }
-
-  /**
-   * SECURITY: XOR decryption with HMAC verification
-   */
-  private static decryptFromXORHMAC(encryptedToken: string, key: Uint8Array): string {
-    const combined = new Uint8Array(
-      atob(encryptedToken).split('').map(char => char.charCodeAt(0))
-    );
-
-    if (combined.length < 48) { // 16 (IV) + 32 (MAC) minimum
-      throw new Error('Invalid encrypted token format');
-    }
-
-    const iv = combined.slice(0, 16);
-    const mac = combined.slice(16, 48);
-    const ciphertext = combined.slice(48);
-
-    const encKey = this.deriveKey(key, iv, 'encrypt');
-    const macKey = this.deriveKey(key, iv, 'mac');
-
-    // Verify HMAC
-    const expectedMac = this.computeHMAC(macKey, iv, ciphertext);
-    if (!this.constantTimeEqual(mac, expectedMac)) {
-      throw new Error('Token authentication failed');
-    }
-
-    // Decrypt
-    const decrypted = new Uint8Array(ciphertext.length);
-    for (let i = 0; i < ciphertext.length; i++) {
-      decrypted[i] = ciphertext[i]! ^ encKey[i % encKey.length]!;
-    }
-
-    return this.decoder!.decode(decrypted);
-  }
-
-  /**
-   * SECURITY: Simple key derivation using repeated hashing
-   */
-  private static deriveKey(key: Uint8Array, salt: Uint8Array, purpose: string): Uint8Array {
-    const input = new Uint8Array(key.length + salt.length + purpose.length);
-    input.set(key);
-    input.set(salt, key.length);
-    input.set(this.encoder!.encode(purpose), key.length + salt.length);
-    
-    // Simple hash-based derivation (not PBKDF2, but better than nothing)
-    return this.simpleHash(input);
-  }
-
-  /**
-   * SECURITY: Simple HMAC computation using available hash functions
-   */
-  private static computeHMAC(key: Uint8Array, iv: Uint8Array, data: Uint8Array): Uint8Array {
-    const blockSize = 64; // SHA-256 block size
-    const opad = new Uint8Array(blockSize).fill(0x5c);
-    const ipad = new Uint8Array(blockSize).fill(0x36);
-    
-    // Adjust key length
-    let hmacKey = new Uint8Array(blockSize);
-    if (key.length > blockSize) {
-      const hashedKey = this.simpleHash(key);
-      hmacKey.set(hashedKey);
-    } else {
-      hmacKey.set(key);
-    }
-
-    // XOR with pads
-    for (let i = 0; i < blockSize; i++) {
-      opad[i] ^= hmacKey[i]!;
-      ipad[i] ^= hmacKey[i]!;
-    }
-
-    // Inner hash
-    const innerInput = new Uint8Array(ipad.length + iv.length + data.length);
-    innerInput.set(ipad);
-    innerInput.set(iv, ipad.length);
-    innerInput.set(data, ipad.length + iv.length);
-    const innerHash = this.simpleHash(innerInput);
-
-    // Outer hash
-    const outerInput = new Uint8Array(opad.length + innerHash.length);
-    outerInput.set(opad);
-    outerInput.set(innerHash, opad.length);
-    
-    return this.simpleHash(outerInput);
-  }
-
-  /**
-   * SECURITY: Simple hash function (not cryptographically secure, but better than none)
-   */
-  private static simpleHash(data: Uint8Array): Uint8Array {
-    const hash = new Uint8Array(32);
-    let h = 0x811c9dc5; // FNV offset basis
-    
-    for (let i = 0; i < data.length; i++) {
-      h ^= data[i]!;
-      h = (h * 0x01000193) >>> 0; // FNV prime
-    }
-
-    // Generate 32 bytes from single hash
-    for (let i = 0; i < 32; i++) {
-      hash[i] = (h >>> (i % 32)) & 0xff;
-      h = (h * 0x01000193) >>> 0;
-    }
-
-    return hash;
-  }
-
-  /**
-   * SECURITY: Constant-time comparison to prevent timing attacks
-   */
-  private static constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
-    if (a.length !== b.length) {
-      return false;
-    }
-
-    let result = 0;
-    for (let i = 0; i < a.length; i++) {
-      result |= a[i]! ^ b[i]!;
-    }
-
-    return result === 0;
   }
 }

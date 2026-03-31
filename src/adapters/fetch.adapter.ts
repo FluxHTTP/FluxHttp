@@ -156,7 +156,7 @@ export function fetchAdapter<T = unknown>(
           data: responseData,
           status: response.status,
           statusText: response.statusText,
-          headers: Object.fromEntries(Array.from((response.headers as any).entries())),
+          headers: Object.fromEntries(Array.from(response.headers.entries())),
           config,
           request: response,
         };

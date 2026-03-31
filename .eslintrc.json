@@ -27,5 +27,13 @@
     ],
     "@typescript-eslint/consistent-type-imports": "error",
     "no-console": ["warn", { "allow": ["warn", "error"] }]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["tests/**/*.ts", "tests/**/*.js"],
+      "rules": {
+        "@typescript-eslint/no-floating-promises": "off"
+      }
+    }
+  ]
 }

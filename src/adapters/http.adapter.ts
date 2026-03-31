@@ -182,18 +182,21 @@ export function httpAdapter<T = unknown>(
           responseStream = res.pipe(zlib.createGunzip());
           // BUG-012 FIX: Add error handlers to decompression streams
           responseStream.on('error', (error: Error) => {
+            req.destroy();
             reject(createNetworkError(`Decompression error (gzip): ${error.message}`, config, req));
           });
         } else if (encoding === 'deflate') {
           responseStream = res.pipe(zlib.createInflateRaw());
           // BUG-012 FIX: Add error handlers to decompression streams
           responseStream.on('error', (error: Error) => {
+            req.destroy();
             reject(createNetworkError(`Decompression error (deflate): ${error.message}`, config, req));
           });
         } else if (encoding === 'br') {
           responseStream = res.pipe(zlib.createBrotliDecompress());
           // BUG-012 FIX: Add error handlers to decompression streams
           responseStream.on('error', (error: Error) => {
+            req.destroy();
             reject(createNetworkError(`Decompression error (brotli): ${error.message}`, config, req));
           });
         }

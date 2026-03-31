@@ -203,7 +203,8 @@ export class LocalStorageCacheStorage implements CacheStorage {
       }
 
       return entry;
-    } catch {
+    } catch (e) {
+      console.warn(`[fluxhttp/core] LocalStorage parse error for key ${key}:`, e);
       return null;
     }
   }
@@ -215,7 +216,8 @@ export class LocalStorageCacheStorage implements CacheStorage {
 
     try {
       localStorage.setItem(this.prefix + key, JSON.stringify(entry));
-    } catch {
+    } catch (e) {
+      console.warn(`[fluxhttp/core] LocalStorage set error for key ${key}:`, e);
       // Storage quota exceeded or other error
       // Could implement LRU eviction here
     }
@@ -296,7 +298,8 @@ export class SessionStorageCacheStorage implements CacheStorage {
       }
 
       return entry;
-    } catch {
+    } catch (e) {
+      console.warn(`[fluxhttp/core] SessionStorage parse error for key ${key}:`, e);
       return null;
     }
   }
@@ -308,7 +311,8 @@ export class SessionStorageCacheStorage implements CacheStorage {
 
     try {
       sessionStorage.setItem(this.prefix + key, JSON.stringify(entry));
-    } catch {
+    } catch (e) {
+      console.warn(`[fluxhttp/core] SessionStorage set error for key ${key}:`, e);
       // Storage quota exceeded or other error
     }
   }
